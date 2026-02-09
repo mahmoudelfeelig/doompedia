@@ -14,6 +14,7 @@
 - Production-grade dump ingestion hardening (baseline XML extractor is implemented).
 - Download manager with resumable shard network transfers.
 - Background periodic update checks.
+- Static-host publishing/deployment workflow for pack artifacts.
 - Full accessibility and performance verification on device matrix.
 
 ## Milestone C

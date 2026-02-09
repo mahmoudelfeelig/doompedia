@@ -18,16 +18,38 @@ jobs:
         working-directory: data-pipeline
         run: PYTHONPATH=src pytest -q
 
-  android-static:
+  android-unit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate Android sources exist
-        run: test -f android-app/app/src/main/java/com/feelbachelor/wikiscroll/MainActivity.kt
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.10.2
+      - uses: android-actions/setup-android@v3
+      - name: Run Android unit tests
+        working-directory: android-app
+        run: gradle testDebugUnitTest --stacktrace
 
-  ios-static:
+  ios-build:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate iOS sources exist
-        run: test -f ios-app/WikiScroll/App/WikiScrollApp.swift
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        working-directory: ios-app
+        run: xcodegen generate
+      - name: Build iOS app (no signing)
+        working-directory: ios-app
+        run: |
+          xcodebuild \
+            -project Doompedia.xcodeproj \
+            -scheme Doompedia \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,name=iPhone 15" \
+            CODE_SIGNING_ALLOWED=NO \
+            build

@@ -27,8 +27,7 @@
   - request full shard refresh.
 - Compression policy:
   - default `none` compression for broad compatibility,
-  - optional `gzip` path supported by pipeline and Android installer,
-  - iOS installer currently accepts `none` payloads only.
+  - optional `gzip` path supported by pipeline and both mobile runtimes.
 - DB migration failure:
   - preserve old DB,
   - prompt user to retry migration/update.

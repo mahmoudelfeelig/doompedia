@@ -39,8 +39,7 @@
 - Delta patch format:
   - NDJSON operations (`upsert`, `delete`)
   - default transport uses uncompressed files for broad runtime compatibility
-  - optional gzip compression supported by pipeline and Android runtime
-  - iOS runtime currently targets uncompressed payloads in-app
+  - optional gzip compression supported by pipeline and both mobile runtimes
   - operations keyed by `page_id`, versioned by `source_rev_id`
 - Fallback:
   - if delta chain too long, checksum mismatch, or apply failure occurs, force full shard refresh.

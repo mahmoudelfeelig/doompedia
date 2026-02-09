@@ -23,7 +23,7 @@ Offline-first discovery app with 1M Wikipedia summary cards, native Android and 
 - Title-only search in MVP (exact/prefix/alias + small typo tolerance).
 - Personalization default: `LOW` with `OFF` and `MEDIUM` options.
 - Chunked pack install with resumable shard download and checksum validation.
-- Default transport compression is `none`, with optional `gzip` pipeline output (Android runtime supports `gzip`; iOS runtime currently targets `none`).
+- Default transport compression is `none`, with optional `gzip` pipeline output (supported by both Android and iOS runtimes).
 
 ## Offline behavior
 - Works offline for feed, bookmarks, history, settings, and title search.
@@ -40,3 +40,12 @@ Use `scripts/build_en_1m_pack.sh` to generate a real `en-core-1m` pack from Wiki
 - downloads `enwiki-latest-page.sql.gz` and `enwiki-latest-page_props.sql.gz`,
 - builds 1,000,000 title+description+URL card records,
 - emits shard pack + manifest under `data/out/en-1m/pack-v1/`.
+
+## Publish/deploy pack
+- Prepare hosted pack layout: `scripts/publish_pack.sh`
+- Deploy to S3-compatible storage: `scripts/deploy_pack_to_s3.sh`
+- See full guide: `docs/DEPLOYMENT.md`
+
+## Release readiness
+- Full release checklist: `docs/RELEASE_CHECKLIST.md`
+- Local data build result snapshot: `docs/DATASET_BUILD_RESULT.md`

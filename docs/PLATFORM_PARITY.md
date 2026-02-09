@@ -24,4 +24,4 @@
 - Manifest-driven update path supports delta-first with full-pack fallback.
 - Compression support:
   - Android: `none` and `gzip` shard/delta payloads.
-  - iOS: `none` payloads in runtime; gzip decoding is intentionally deferred.
+  - iOS: `none` and `gzip` shard/delta payloads.
