@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Doompedia</string>
+    <string name="feed_tab">Feed</string>
+    <string name="settings_tab">Settings</string>
+    <string name="search_hint">Search by title</string>
+    <string name="why_this">Why this?</string>
+    <string name="open_article">Open article</string>
+    <string name="bookmark">Bookmark</string>
+    <string name="remove_bookmark">Remove bookmark</string>
+</resources>
