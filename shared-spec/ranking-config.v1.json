@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "weights": {
+    "interest": 0.42,
+    "novelty": 0.20,
+    "diversity": 0.18,
+    "quality": 0.12,
+    "repetitionPenalty": 0.22
+  },
+  "personalization": {
+    "defaultLevel": "LOW",
+    "levels": {
+      "OFF": 0.0,
+      "LOW": 0.5,
+      "MEDIUM": 1.0
+    },
+    "learningRates": {
+      "open": 0.35,
+      "bookmark": 0.50,
+      "hide": -0.55,
+      "skip": -0.10
+    },
+    "dailyDriftCap": 0.2,
+    "topicClamp": {
+      "min": -1.0,
+      "max": 1.0
+    }
+  },
+  "guardrails": {
+    "explorationFloor": 0.25,
+    "windowSize": 12,
+    "maxSameTopicInWindow": 4,
+    "minDistinctTopicsInWindow": 4,
+    "cooldownCards": 4
+  },
+  "search": {
+    "typoDistance": 1,
+    "typoMinQueryLength": 5,
+    "maxTypoCandidates": 200,
+    "maxResults": 30
+  }
+}
