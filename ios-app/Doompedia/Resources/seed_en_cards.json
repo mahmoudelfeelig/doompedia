@@ -1,0 +1,204 @@
+[
+  {
+    "page_id": 1,
+    "lang": "en",
+    "title": "Ada Lovelace",
+    "summary": "Ada Lovelace was an English mathematician and writer known for early work on Charles Babbage's analytical engine and for notes that anticipated software concepts.",
+    "wiki_url": "https://en.wikipedia.org/wiki/Ada_Lovelace",
+    "topic_key": "science",
+    "quality_score": 0.97,
+    "updated_at": "2026-02-09T00:00:00Z",
+    "aliases": ["Augusta Ada King", "Countess of Lovelace"]
+  },
+  {
+    "page_id": 2,
+    "lang": "en",
+    "title": "Grace Hopper",
+    "summary": "Grace Hopper was an American computer scientist and United States Navy rear admiral who helped pioneer compiler design and popularized machine-independent programming languages.",
+    "wiki_url": "https://en.wikipedia.org/wiki/Grace_Hopper",
+    "topic_key": "science",
+    "quality_score": 0.94,
+    "updated_at": "2026-02-09T00:00:00Z",
+    "aliases": ["Amazing Grace"]
+  },
+  {
+    "page_id": 3,
+    "lang": "en",
+    "title": "Alan Turing",
+    "summary": "Alan Turing was a British mathematician and logician whose work in computation, cryptanalysis, and artificial intelligence profoundly shaped modern computer science.",
+    "wiki_url": "https://en.wikipedia.org/wiki/Alan_Turing",
+    "topic_key": "science",
+    "quality_score": 0.98,
+    "updated_at": "2026-02-09T00:00:00Z"
+  },
+  {
+    "page_id": 4,
+    "lang": "en",
+    "title": "Marie Curie",
+    "summary": "Marie Curie was a physicist and chemist who conducted pioneering research on radioactivity and became the first person to win Nobel Prizes in two sciences.",
+    "wiki_url": "https://en.wikipedia.org/wiki/Marie_Curie",
+    "topic_key": "science",
+    "quality_score": 0.96,
+    "updated_at": "2026-02-09T00:00:00Z"
+  },
+  {
+    "page_id": 5,
+    "lang": "en",
+    "title": "Maya Angelou",
+    "summary": "Maya Angelou was an American poet, memoirist, and civil rights activist whose autobiographical works and performances influenced literature and public discourse.",
+    "wiki_url": "https://en.wikipedia.org/wiki/Maya_Angelou",
+    "topic_key": "culture",
+    "quality_score": 0.91,
+    "updated_at": "2026-02-09T00:00:00Z"
+  },
+  {
+    "page_id": 6,
+    "lang": "en",
+    "title": "William Shakespeare",
+    "summary": "William Shakespeare was an English playwright, poet, and actor whose plays and sonnets remain foundational works in world literature and theater.",
+    "wiki_url": "https://en.wikipedia.org/wiki/William_Shakespeare",
+    "topic_key": "culture",
+    "quality_score": 0.95,
+    "updated_at": "2026-02-09T00:00:00Z"
+  },
+  {
+    "page_id": 7,
+    "lang": "en",
+    "title": "Frida Kahlo",
+    "summary": "Frida Kahlo was a Mexican painter recognized for deeply personal self-portraits that blended realism, symbolism, and reflections on identity and pain.",
+    "wiki_url": "https://en.wikipedia.org/wiki/Frida_Kahlo",
+    "topic_key": "culture",
+    "quality_score": 0.9,
+    "updated_at": "2026-02-09T00:00:00Z"
+  },
+  {
+    "page_id": 8,
+    "lang": "en",
+    "title": "History of the Internet",
+    "summary": "The history of the Internet traces networks developed for resilient communication into the global infrastructure for information exchange and digital services.",
+    "wiki_url": "https://en.wikipedia.org/wiki/History_of_the_Internet",
+    "topic_key": "history",
+    "quality_score": 0.88,
+    "updated_at": "2026-02-09T00:00:00Z"
+  },
+  {
+    "page_id": 9,
+    "lang": "en",
+    "title": "Renaissance",
+    "summary": "The Renaissance was a period of cultural, artistic, and scientific revival in Europe that followed the Middle Ages and transformed intellectual life.",
+    "wiki_url": "https://en.wikipedia.org/wiki/Renaissance",
+    "topic_key": "history",
+    "quality_score": 0.92,
+    "updated_at": "2026-02-09T00:00:00Z"
+  },
+  {
+    "page_id": 10,
+    "lang": "en",
+    "title": "Roman Empire",
+    "summary": "The Roman Empire was the post-republican period of ancient Rome marked by territorial expansion, centralized authority, and enduring legal and engineering legacies.",
+    "wiki_url": "https://en.wikipedia.org/wiki/Roman_Empire",
+    "topic_key": "history",
+    "quality_score": 0.93,
+    "updated_at": "2026-02-09T00:00:00Z"
+  },
+  {
+    "page_id": 11,
+    "lang": "en",
+    "title": "Climate change",
+    "summary": "Climate change refers to long-term shifts in global or regional climate patterns, largely linked in recent decades to human-generated greenhouse gas emissions.",
+    "wiki_url": "https://en.wikipedia.org/wiki/Climate_change",
+    "topic_key": "environment",
+    "quality_score": 0.97,
+    "updated_at": "2026-02-09T00:00:00Z"
+  },
+  {
+    "page_id": 12,
+    "lang": "en",
+    "title": "Amazon rainforest",
+    "summary": "The Amazon rainforest is the world's largest tropical forest, known for its biodiversity, climate influence, and central role in regional ecosystems.",
+    "wiki_url": "https://en.wikipedia.org/wiki/Amazon_rainforest",
+    "topic_key": "environment",
+    "quality_score": 0.89,
+    "updated_at": "2026-02-09T00:00:00Z"
+  },
+  {
+    "page_id": 13,
+    "lang": "en",
+    "title": "Solar energy",
+    "summary": "Solar energy is radiant light and heat from the Sun harnessed through technologies such as photovoltaics, concentrated solar power, and thermal systems.",
+    "wiki_url": "https://en.wikipedia.org/wiki/Solar_energy",
+    "topic_key": "technology",
+    "quality_score": 0.9,
+    "updated_at": "2026-02-09T00:00:00Z"
+  },
+  {
+    "page_id": 14,
+    "lang": "en",
+    "title": "Machine learning",
+    "summary": "Machine learning is a field of artificial intelligence focused on algorithms that learn patterns from data to make predictions or decisions without explicit rules.",
+    "wiki_url": "https://en.wikipedia.org/wiki/Machine_learning",
+    "topic_key": "technology",
+    "quality_score": 0.96,
+    "updated_at": "2026-02-09T00:00:00Z"
+  },
+  {
+    "page_id": 15,
+    "lang": "en",
+    "title": "Quantum mechanics",
+    "summary": "Quantum mechanics is a fundamental physical theory describing nature at atomic and subatomic scales where probabilities and wave-particle behavior dominate.",
+    "wiki_url": "https://en.wikipedia.org/wiki/Quantum_mechanics",
+    "topic_key": "science",
+    "quality_score": 0.94,
+    "updated_at": "2026-02-09T00:00:00Z"
+  },
+  {
+    "page_id": 16,
+    "lang": "en",
+    "title": "Mount Everest",
+    "summary": "Mount Everest is Earth's highest mountain above sea level, located in the Himalayas on the border between Nepal and the Tibet Autonomous Region.",
+    "wiki_url": "https://en.wikipedia.org/wiki/Mount_Everest",
+    "topic_key": "geography",
+    "quality_score": 0.87,
+    "updated_at": "2026-02-09T00:00:00Z"
+  },
+  {
+    "page_id": 17,
+    "lang": "en",
+    "title": "Pacific Ocean",
+    "summary": "The Pacific Ocean is the largest and deepest of Earth's oceanic divisions, stretching from the Arctic to the Southern Ocean and connecting many ecosystems.",
+    "wiki_url": "https://en.wikipedia.org/wiki/Pacific_Ocean",
+    "topic_key": "geography",
+    "quality_score": 0.88,
+    "updated_at": "2026-02-09T00:00:00Z"
+  },
+  {
+    "page_id": 18,
+    "lang": "en",
+    "title": "World Health Organization",
+    "summary": "The World Health Organization is a specialized United Nations agency responsible for international public health coordination and global health guidance.",
+    "wiki_url": "https://en.wikipedia.org/wiki/World_Health_Organization",
+    "topic_key": "society",
+    "quality_score": 0.86,
+    "updated_at": "2026-02-09T00:00:00Z"
+  },
+  {
+    "page_id": 19,
+    "lang": "en",
+    "title": "Artificial intelligence",
+    "summary": "Artificial intelligence is the study and development of systems that perform tasks associated with human cognition, including reasoning, language, and planning.",
+    "wiki_url": "https://en.wikipedia.org/wiki/Artificial_intelligence",
+    "topic_key": "technology",
+    "quality_score": 0.95,
+    "updated_at": "2026-02-09T00:00:00Z"
+  },
+  {
+    "page_id": 20,
+    "lang": "en",
+    "title": "Biodiversity",
+    "summary": "Biodiversity describes the variety of life across genes, species, and ecosystems, and is central to ecological resilience and long-term environmental stability.",
+    "wiki_url": "https://en.wikipedia.org/wiki/Biodiversity",
+    "topic_key": "environment",
+    "quality_score": 0.9,
+    "updated_at": "2026-02-09T00:00:00Z"
+  }
+]
