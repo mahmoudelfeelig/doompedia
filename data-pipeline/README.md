@@ -76,6 +76,22 @@ python -m doompedia_pipeline.build_pack \
   --compression none
 ```
 
+4) Publish pack for static hosting (optional):
+```bash
+python -m doompedia_pipeline.publish_pack \
+  --pack-dir out/en-1m/pack-v1 \
+  --output-dir out/site/packs/en-core-1m/v1 \
+  --base-url https://example.org/packs/en-core-1m/v1 \
+  --latest-pointer out/site/packs/en-core-1m/latest.json \
+  --clean
+```
+
+Equivalent convenience wrapper:
+```bash
+BASE_URL=https://example.org/packs/en-core-1m/v1 \
+./scripts/publish_pack.sh
+```
+
 ## Build delta
 ```bash
 python -m doompedia_pipeline.build_delta \

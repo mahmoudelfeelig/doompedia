@@ -16,6 +16,7 @@ doompedia-build-pack = "doompedia_pipeline.build_pack:main"
 doompedia-build-delta = "doompedia_pipeline.build_delta:main"
 doompedia-extract-dump = "doompedia_pipeline.extract_dump:main"
 doompedia-build-en-1m-from-sql = "doompedia_pipeline.build_en_1m_from_sql:main"
+doompedia-publish-pack = "doompedia_pipeline.publish_pack:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
