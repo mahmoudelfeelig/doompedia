@@ -28,7 +28,7 @@ final class PackInstaller {
     }
 
     private func applyShard(fileURL: URL) throws {
-        if fileURL.pathExtension == "gz" || fileURL.pathExtension == "zst" {
+        if fileURL.pathExtension == "zst" {
             throw NSError(
                 domain: "Doompedia",
                 code: 42,
@@ -38,7 +38,11 @@ final class PackInstaller {
 
         var batch: [SeedRow] = []
 
-        try LineReader.forEachLine(at: fileURL) { line in
+        let lineReader: ((URL, (String) throws -> Void) throws -> Void) = fileURL.pathExtension == "gz"
+            ? GzipLineReader.forEachLine
+            : LineReader.forEachLine
+
+        try lineReader(fileURL) { line in
             let payload = try decoder.decode(ShardRowPayload.self, from: Data(line.utf8))
             let record = payload.article
             batch.append(

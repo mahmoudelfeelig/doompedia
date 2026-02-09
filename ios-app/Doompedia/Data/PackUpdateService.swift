@@ -54,11 +54,11 @@ final class PackUpdateService {
                 return PackUpdateResult(status: .upToDate, installedVersion: installedVersion, message: "No new pack available")
             }
 
-            if manifest.compression != "none" {
+            if manifest.compression != "none" && manifest.compression != "gzip" {
                 return PackUpdateResult(
                     status: .failed,
                     installedVersion: installedVersion,
-                    message: "iOS runtime currently supports only uncompressed pack payloads"
+                    message: "Unsupported pack compression: \(manifest.compression)"
                 )
             }
 

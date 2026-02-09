@@ -25,4 +25,4 @@ Native iOS client (Swift + SwiftUI) with local SQLite storage, deterministic ran
 - `seed_en_cards.json` is demonstration data. Production content should be imported from shard packs built in `data-pipeline`.
 - Search is title-only by product decision to keep storage and latency bounded at 1M records.
 - Set a manifest URL in Settings to enable remote pack updates.
-- Runtime install/update expects uncompressed (`none`) shard/delta payloads.
+- Runtime install/update supports `none` and `gzip` shard/delta payloads.

@@ -9,7 +9,7 @@ final class DeltaApplier {
     }
 
     func apply(from fileURL: URL) throws -> Int {
-        if fileURL.pathExtension == "gz" || fileURL.pathExtension == "zst" {
+        if fileURL.pathExtension == "zst" {
             throw NSError(
                 domain: "Doompedia",
                 code: 51,
@@ -21,7 +21,11 @@ final class DeltaApplier {
         var deletes: [Int64] = []
         var applied = 0
 
-        try LineReader.forEachLine(at: fileURL) { line in
+        let lineReader: ((URL, (String) throws -> Void) throws -> Void) = fileURL.pathExtension == "gz"
+            ? GzipLineReader.forEachLine
+            : LineReader.forEachLine
+
+        try lineReader(fileURL) { line in
             let row = try decoder.decode(DeltaRowPayload.self, from: Data(line.utf8))
             switch row.op {
             case "upsert":
