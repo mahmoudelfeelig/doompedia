@@ -64,7 +64,11 @@ class PackInstaller(
                     normalizedTitle = article.normalized_title.ifBlank { normalizeSearch(article.title) },
                     summary = article.summary,
                     wikiUrl = article.wiki_url,
-                    topicKey = article.topic_key,
+                    topicKey = TopicClassifier.normalizeTopic(
+                        rawTopic = article.topic_key,
+                        title = article.title,
+                        summary = article.summary,
+                    ),
                     qualityScore = article.quality_score,
                     isDisambiguation = article.is_disambiguation,
                     sourceRevId = article.source_rev_id,

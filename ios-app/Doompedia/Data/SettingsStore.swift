@@ -21,7 +21,31 @@ final class SettingsStore: ObservableObject {
         var copy = settings
         mutate(&copy)
         settings = copy
-        if let data = try? JSONEncoder().encode(copy) {
+        persist(copy)
+    }
+
+    func exportJSONString(pretty: Bool = true) -> String? {
+        let encoder = JSONEncoder()
+        if pretty {
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        }
+        guard let data = try? encoder.encode(settings) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    @discardableResult
+    func importJSONString(_ payload: String) throws -> UserSettings {
+        let data = Data(payload.utf8)
+        var decoded = try JSONDecoder().decode(UserSettings.self, from: data)
+        decoded.language = decoded.language.trimmingCharacters(in: .whitespacesAndNewlines)
+        decoded.manifestURL = decoded.manifestURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        settings = decoded
+        persist(decoded)
+        return decoded
+    }
+
+    private func persist(_ value: UserSettings) {
+        if let data = try? JSONEncoder().encode(value) {
             defaults.set(data, forKey: key)
         }
     }

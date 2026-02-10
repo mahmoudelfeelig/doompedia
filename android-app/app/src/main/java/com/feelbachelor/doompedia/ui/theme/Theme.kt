@@ -21,11 +21,20 @@ private val DarkColors = darkColorScheme(
 @Composable
 fun DoompediaTheme(
     forceDark: Boolean? = null,
+    accentHex: String = "",
     content: @Composable () -> Unit,
 ) {
     val darkTheme = forceDark ?: isSystemInDarkTheme()
+    val baseScheme = if (darkTheme) DarkColors else LightColors
+    val fallbackAccent = if (darkTheme) DarkPrimary else LightPrimary
+    val accent = parseHexColor(accentHex, fallbackAccent)
+    val scheme = baseScheme.copy(
+        primary = accent,
+        secondary = softenedColor(accent, baseScheme.background),
+        tertiary = softenedColor(accent, baseScheme.surface),
+    )
     MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
+        colorScheme = scheme,
         typography = Typography,
         content = content,
     )

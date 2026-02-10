@@ -11,11 +11,13 @@
     "defaultLevel": "LOW",
     "levels": {
       "OFF": 0.0,
-      "LOW": 0.5,
-      "MEDIUM": 1.0
+      "LOW": 0.45,
+      "MEDIUM": 1.0,
+      "HIGH": 1.35
     },
     "learningRates": {
       "open": 0.35,
+      "like": 0.7,
       "bookmark": 0.50,
       "hide": -0.55,
       "skip": -0.10

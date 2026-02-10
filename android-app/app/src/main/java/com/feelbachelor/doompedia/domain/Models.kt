@@ -21,10 +21,18 @@ data class RankedCard(
     val why: String,
 )
 
+data class SaveFolderSummary(
+    val folderId: Long,
+    val name: String,
+    val isDefault: Boolean,
+    val articleCount: Int,
+)
+
 enum class PersonalizationLevel {
     OFF,
     LOW,
     MEDIUM,
+    HIGH,
 }
 
 enum class ThemeMode {

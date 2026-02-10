@@ -111,6 +111,67 @@ interface WikiDao {
     @Query("SELECT EXISTS(SELECT 1 FROM bookmarks WHERE pageId = :pageId)")
     suspend fun isBookmarked(pageId: Long): Boolean
 
+    @Query(
+        """
+        INSERT OR IGNORE INTO save_folders(folderId, name, isDefault, createdAt)
+        VALUES (1, 'Bookmarks', 1, :createdAt)
+        """
+    )
+    suspend fun ensureDefaultFolder(createdAt: Long)
+
+    @Query(
+        """
+        INSERT OR IGNORE INTO article_folder_refs(folderId, pageId, createdAt)
+        SELECT 1, b.pageId, b.createdAt
+        FROM bookmarks b
+        """
+    )
+    suspend fun backfillBookmarksIntoDefaultFolder()
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertFolder(row: SaveFolderEntity): Long
+
+    @Query(
+        """
+        SELECT f.folderId AS folderId, f.name AS name, f.isDefault AS isDefault, COUNT(r.pageId) AS articleCount
+        FROM save_folders f
+        LEFT JOIN article_folder_refs r ON r.folderId = f.folderId
+        GROUP BY f.folderId
+        ORDER BY f.isDefault DESC, f.name ASC
+        """
+    )
+    suspend fun saveFoldersWithCounts(): List<SaveFolderSummaryRow>
+
+    @Query("DELETE FROM save_folders WHERE folderId = :folderId AND isDefault = 0")
+    suspend fun deleteFolder(folderId: Long): Int
+
+    @Query("SELECT folderId FROM article_folder_refs WHERE pageId = :pageId")
+    suspend fun folderIdsForArticle(pageId: Long): List<Long>
+
+    @Query("DELETE FROM article_folder_refs WHERE pageId = :pageId")
+    suspend fun clearFolderRefsForArticle(pageId: Long)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertFolderRefs(rows: List<ArticleFolderRefEntity>)
+
+    @Query("DELETE FROM article_folder_refs WHERE folderId = :folderId AND pageId = :pageId")
+    suspend fun deleteFolderRef(folderId: Long, pageId: Long)
+
+    @Query(
+        """
+        SELECT a.pageId, a.lang, a.title, a.normalizedTitle, a.summary, a.wikiUrl,
+               a.topicKey, a.qualityScore, a.isDisambiguation, a.sourceRevId, a.updatedAt,
+               CASE WHEN b.pageId IS NULL THEN 0 ELSE 1 END AS bookmarked
+        FROM article_folder_refs r
+        JOIN articles a ON a.pageId = r.pageId
+        LEFT JOIN bookmarks b ON b.pageId = a.pageId
+        WHERE r.folderId = :folderId
+        ORDER BY r.createdAt DESC, a.pageId DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun savedCardsInFolder(folderId: Long, limit: Int): List<ArticleWithBookmark>
+
     @Insert
     suspend fun insertHistory(row: HistoryEntity)
 

@@ -56,6 +56,47 @@ data class BookmarkEntity(
 )
 
 @Entity(
+    tableName = "save_folders",
+    indices = [
+        Index(value = ["name"], unique = true),
+    ],
+)
+data class SaveFolderEntity(
+    @PrimaryKey(autoGenerate = true) val folderId: Long = 0,
+    val name: String,
+    val isDefault: Boolean,
+    val createdAt: Long,
+)
+
+@Entity(
+    tableName = "article_folder_refs",
+    primaryKeys = ["folderId", "pageId"],
+    foreignKeys = [
+        ForeignKey(
+            entity = SaveFolderEntity::class,
+            parentColumns = ["folderId"],
+            childColumns = ["folderId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+        ForeignKey(
+            entity = ArticleEntity::class,
+            parentColumns = ["pageId"],
+            childColumns = ["pageId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [
+        Index(value = ["pageId"]),
+        Index(value = ["folderId"]),
+    ],
+)
+data class ArticleFolderRefEntity(
+    val folderId: Long,
+    val pageId: Long,
+    val createdAt: Long,
+)
+
+@Entity(
     tableName = "history",
     indices = [
         Index(value = ["openedAt"]),
@@ -93,4 +134,11 @@ data class ArticleWithBookmark(
     val sourceRevId: Long?,
     val updatedAt: String,
     val bookmarked: Boolean,
+)
+
+data class SaveFolderSummaryRow(
+    val folderId: Long,
+    val name: String,
+    val isDefault: Boolean,
+    val articleCount: Int,
 )

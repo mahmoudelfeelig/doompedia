@@ -9,8 +9,10 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.feelbachelor.doompedia.domain.PersonalizationLevel
 import com.feelbachelor.doompedia.domain.ThemeMode
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import org.json.JSONObject
 
 private val Context.dataStore by preferencesDataStore(name = "doompedia_settings")
 
@@ -18,6 +20,7 @@ data class UserSettings(
     val language: String = "en",
     val personalizationLevel: PersonalizationLevel = PersonalizationLevel.LOW,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val accentHex: String = "#0B6E5B",
     val wifiOnlyDownloads: Boolean = true,
     val manifestUrl: String = "",
     val installedPackVersion: Int = 0,
@@ -31,6 +34,7 @@ class UserPreferencesStore(
     private val languageKey = stringPreferencesKey("language")
     private val personalizationKey = stringPreferencesKey("personalization_level")
     private val themeKey = stringPreferencesKey("theme_mode")
+    private val accentHexKey = stringPreferencesKey("accent_hex")
     private val wifiOnlyKey = booleanPreferencesKey("wifi_only_downloads")
     private val manifestUrlKey = stringPreferencesKey("manifest_url")
     private val installedPackVersionKey = intPreferencesKey("installed_pack_version")
@@ -49,6 +53,10 @@ class UserPreferencesStore(
 
     suspend fun setTheme(themeMode: ThemeMode) {
         context.dataStore.edit { prefs -> prefs[themeKey] = themeMode.name }
+    }
+
+    suspend fun setAccentHex(hex: String) {
+        context.dataStore.edit { prefs -> prefs[accentHexKey] = hex.trim() }
     }
 
     suspend fun setWifiOnly(enabled: Boolean) {
@@ -70,6 +78,46 @@ class UserPreferencesStore(
         }
     }
 
+    fun exportToJson(settings: UserSettings): String {
+        val payload = JSONObject()
+            .put("language", settings.language)
+            .put("personalizationLevel", settings.personalizationLevel.name)
+            .put("themeMode", settings.themeMode.name)
+            .put("accentHex", settings.accentHex)
+            .put("wifiOnlyDownloads", settings.wifiOnlyDownloads)
+            .put("manifestUrl", settings.manifestUrl)
+            .put("installedPackVersion", settings.installedPackVersion)
+        return payload.toString(2)
+    }
+
+    suspend fun importFromJson(payload: String): Result<UserSettings> {
+        return runCatching {
+            val root = JSONObject(payload)
+            context.dataStore.edit { prefs ->
+                root.optString("language").takeIf { it.isNotBlank() }?.let { prefs[languageKey] = it }
+                root.optString("personalizationLevel")
+                    .uppercase()
+                    .let { raw ->
+                        PersonalizationLevel.entries.firstOrNull { it.name == raw }
+                    }?.let { prefs[personalizationKey] = it.name }
+                root.optString("themeMode")
+                    .uppercase()
+                    .let { raw ->
+                        ThemeMode.entries.firstOrNull { it.name == raw }
+                    }?.let { prefs[themeKey] = it.name }
+                root.optString("accentHex").takeIf { it.isNotBlank() }?.let { prefs[accentHexKey] = it.trim() }
+                if (root.has("wifiOnlyDownloads")) {
+                    prefs[wifiOnlyKey] = root.optBoolean("wifiOnlyDownloads", true)
+                }
+                root.optString("manifestUrl").takeIf { it.isNotBlank() }?.let { prefs[manifestUrlKey] = it.trim() }
+                if (root.has("installedPackVersion")) {
+                    prefs[installedPackVersionKey] = root.optInt("installedPackVersion", 0).coerceAtLeast(0)
+                }
+            }
+            settings.first()
+        }
+    }
+
     private fun toSettings(prefs: Preferences): UserSettings {
         val level = prefs[personalizationKey]?.let {
             PersonalizationLevel.entries.firstOrNull { entry -> entry.name == it }
@@ -83,6 +131,7 @@ class UserPreferencesStore(
             language = prefs[languageKey] ?: "en",
             personalizationLevel = level,
             themeMode = theme,
+            accentHex = prefs[accentHexKey] ?: "#0B6E5B",
             wifiOnlyDownloads = prefs[wifiOnlyKey] ?: true,
             manifestUrl = prefs[manifestUrlKey] ?: "",
             installedPackVersion = prefs[installedPackVersionKey] ?: 0,

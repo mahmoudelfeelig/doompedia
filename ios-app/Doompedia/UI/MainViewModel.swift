@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 
 @MainActor
 final class MainViewModel: ObservableObject {
@@ -7,6 +8,11 @@ final class MainViewModel: ObservableObject {
     @Published var query: String = ""
     @Published var feed: [RankedCard] = []
     @Published var searchResults: [ArticleCard] = []
+    @Published var folders: [SaveFolderSummary] = []
+    @Published var selectedFolderID: Int64 = WikiRepository.defaultBookmarksFolderID
+    @Published var savedCards: [ArticleCard] = []
+    @Published var folderPickerCard: ArticleCard?
+    @Published var folderPickerSelection: Set<Int64> = []
     @Published var isLoading: Bool = true
     @Published var isUpdatingPack: Bool = false
     @Published var message: String?
@@ -30,7 +36,7 @@ final class MainViewModel: ObservableObject {
 
         Task {
             await refreshFeed()
-            await maybeRunAutoUpdate()
+            await refreshSaved()
         }
     }
 
@@ -54,6 +60,93 @@ final class MainViewModel: ObservableObject {
         } catch {
             message = "Failed to load feed: \(error.localizedDescription)"
         }
+    }
+
+    func refreshSaved() async {
+        do {
+            let list = try container.repository.saveFolders()
+            folders = list
+            if !list.contains(where: { $0.folderId == selectedFolderID }) {
+                selectedFolderID = list.first?.folderId ?? WikiRepository.defaultBookmarksFolderID
+            }
+            savedCards = try container.repository.savedCards(folderID: selectedFolderID)
+        } catch {
+            message = "Failed to load saved folders"
+        }
+    }
+
+    func selectSavedFolder(_ folderID: Int64) async {
+        selectedFolderID = folderID
+        do {
+            savedCards = try container.repository.savedCards(folderID: folderID)
+        } catch {
+            message = "Could not load selected folder"
+        }
+    }
+
+    func createFolder(_ name: String) async {
+        do {
+            let created = try container.repository.createFolder(name: name)
+            if !created {
+                message = "Folder name is invalid or already exists"
+                return
+            }
+            await refreshSaved()
+            message = "Folder created"
+        } catch {
+            message = "Could not create folder"
+        }
+    }
+
+    func deleteFolder(_ folderID: Int64) async {
+        do {
+            let deleted = try container.repository.deleteFolder(folderID: folderID)
+            if !deleted {
+                message = "This folder cannot be removed"
+                return
+            }
+            await refreshSaved()
+            message = "Folder removed"
+        } catch {
+            message = "Could not remove folder"
+        }
+    }
+
+    func showFolderPicker(for card: ArticleCard) async {
+        folderPickerCard = card
+        do {
+            folderPickerSelection = try container.repository.selectedFolderIDs(pageID: card.pageId)
+        } catch {
+            folderPickerSelection = []
+        }
+    }
+
+    func toggleFolderInPicker(_ folderID: Int64) {
+        if folderPickerSelection.contains(folderID) {
+            folderPickerSelection.remove(folderID)
+        } else {
+            folderPickerSelection.insert(folderID)
+        }
+    }
+
+    func applyFolderPicker() async {
+        guard let card = folderPickerCard else { return }
+        do {
+            try container.repository.setFoldersForArticle(
+                pageID: card.pageId,
+                folderIDs: folderPickerSelection
+            )
+            folderPickerCard = nil
+            await refreshFeed()
+            await refreshSaved()
+            message = "Saved folders updated"
+        } catch {
+            message = "Could not update saved folders"
+        }
+    }
+
+    func dismissFolderPicker() {
+        folderPickerCard = nil
     }
 
     func updateQuery(_ value: String) {
@@ -86,6 +179,16 @@ final class MainViewModel: ObservableObject {
         }
     }
 
+    func moreLike(_ card: ArticleCard) async {
+        do {
+            try container.repository.recordMoreLike(card: card, level: settings.personalizationLevel)
+            message = "Feed updated to show more \(card.topicKey)"
+            await refreshFeed()
+        } catch {
+            message = "Could not update recommendation preference"
+        }
+    }
+
     func lessLike(_ card: ArticleCard) async {
         do {
             try container.repository.recordLessLike(card: card, level: settings.personalizationLevel)
@@ -99,8 +202,9 @@ final class MainViewModel: ObservableObject {
     func toggleBookmark(_ card: ArticleCard) async {
         do {
             let saved = try container.repository.toggleBookmark(pageId: card.pageId)
-            message = saved ? "Saved bookmark" : "Removed bookmark"
+            message = saved ? "Saved to Bookmarks" : "Removed from Bookmarks"
             await refreshFeed()
+            await refreshSaved()
         } catch {
             message = "Could not update bookmark"
         }
@@ -117,6 +221,11 @@ final class MainViewModel: ObservableObject {
         settings = container.settingsStore.settings
     }
 
+    func setAccentHex(_ hex: String) {
+        container.settingsStore.update { $0.accentHex = hex.trimmingCharacters(in: .whitespacesAndNewlines) }
+        settings = container.settingsStore.settings
+    }
+
     func setWifiOnly(_ enabled: Bool) {
         container.settingsStore.update { $0.wifiOnlyDownloads = enabled }
         settings = container.settingsStore.settings
@@ -127,11 +236,30 @@ final class MainViewModel: ObservableObject {
         settings = container.settingsStore.settings
     }
 
-    func checkForUpdatesNow(silent: Bool = false) async {
+    func exportSettingsToClipboard() {
+        guard let payload = container.settingsStore.exportJSONString(pretty: true) else {
+            message = "Could not export settings"
+            return
+        }
+        UIPasteboard.general.string = payload
+        message = "Settings JSON copied to clipboard"
+    }
+
+    func importSettingsJSON(_ payload: String) async {
+        do {
+            _ = try container.settingsStore.importJSONString(payload)
+            settings = container.settingsStore.settings
+            await refreshFeed()
+            await refreshSaved()
+            message = "Settings imported"
+        } catch {
+            message = "Invalid settings JSON"
+        }
+    }
+
+    func checkForUpdatesNow() async {
         if settings.manifestURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            if !silent {
-                message = "Set a manifest URL first"
-            }
+            message = "Set a manifest URL first"
             return
         }
 
@@ -150,24 +278,10 @@ final class MainViewModel: ObservableObject {
             current.lastUpdateStatus = result.message
         }
         settings = container.settingsStore.settings
-        if !silent || result.status == .failed {
-            message = result.message
-        }
-        if result.status == .updated || !silent {
+        message = result.message
+        if result.status == .updated {
             await refreshFeed()
+            await refreshSaved()
         }
-    }
-
-    private func maybeRunAutoUpdate() async {
-        guard !settings.manifestURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        guard shouldCheckUpdatesNow(lastCheckISO: settings.lastUpdateISO) else { return }
-        await checkForUpdatesNow(silent: true)
-    }
-
-    private func shouldCheckUpdatesNow(lastCheckISO: String) -> Bool {
-        guard !lastCheckISO.isEmpty else { return true }
-        let parser = ISO8601DateFormatter()
-        guard let previous = parser.date(from: lastCheckISO) else { return true }
-        return Date().timeIntervalSince(previous) >= 6 * 60 * 60
     }
 }

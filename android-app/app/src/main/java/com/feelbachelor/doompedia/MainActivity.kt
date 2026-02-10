@@ -1,6 +1,8 @@
 package com.feelbachelor.doompedia
 
 import android.content.Intent
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
@@ -39,7 +41,10 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.DARK -> true
             }
 
-            DoompediaTheme(forceDark = darkMode) {
+            DoompediaTheme(
+                forceDark = darkMode,
+                accentHex = state.value.settings.accentHex,
+            ) {
                 AppScreen(
                     state = state.value,
                     snackbarHostState = snackbarHostState,
@@ -47,12 +52,24 @@ class MainActivity : ComponentActivity() {
                     onRefresh = viewModel::refreshFeed,
                     onOpenCard = viewModel::onOpenCard,
                     onToggleBookmark = viewModel::onToggleBookmark,
+                    onMoreLike = viewModel::onMoreLike,
                     onLessLike = viewModel::onLessLike,
+                    onShowFolderPicker = viewModel::showFolderPicker,
+                    onToggleFolderSelection = viewModel::toggleFolderSelection,
+                    onApplyFolderSelection = viewModel::applyFolderPickerSelection,
+                    onDismissFolderPicker = viewModel::hideFolderPicker,
+                    onRefreshSaved = viewModel::refreshSavedData,
+                    onSelectSavedFolder = viewModel::selectSavedFolder,
+                    onCreateFolder = viewModel::createFolder,
+                    onDeleteFolder = viewModel::deleteFolder,
                     onSetPersonalization = viewModel::setPersonalization,
                     onSetThemeMode = viewModel::setTheme,
+                    onSetAccentHex = viewModel::setAccentHex,
                     onSetWifiOnly = viewModel::setWifiOnly,
                     onSetManifestUrl = viewModel::setManifestUrl,
                     onCheckUpdatesNow = viewModel::checkForUpdatesNow,
+                    onExportSettings = viewModel::exportSettings,
+                    onImportSettings = viewModel::importSettings,
                     onOpenExternalUrl = viewModel::openExternalUrl,
                 )
             }
@@ -75,6 +92,14 @@ class MainActivity : ComponentActivity() {
                         }
 
                         is UiEvent.Snackbar -> {
+                            snackbarHostState.showSnackbar(event.message)
+                        }
+
+                        is UiEvent.CopyToClipboard -> {
+                            val clipboard = getSystemService(ClipboardManager::class.java)
+                            clipboard?.setPrimaryClip(
+                                ClipData.newPlainText("Doompedia Settings", event.text),
+                            )
                             snackbarHostState.showSnackbar(event.message)
                         }
                     }

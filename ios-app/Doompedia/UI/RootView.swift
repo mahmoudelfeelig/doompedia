@@ -10,15 +10,21 @@ struct RootView: View {
                     Label("Feed", systemImage: "rectangle.stack")
                 }
 
+            SavedView(viewModel: viewModel)
+                .tabItem {
+                    Label("Saved", systemImage: "bookmark")
+                }
+
             SettingsView(viewModel: viewModel)
                 .tabItem {
                     Label("Settings", systemImage: "gearshape")
                 }
-
-            AttributionView()
-                .tabItem {
-                    Label("Attribution", systemImage: "doc.text")
-                }
+        }
+        .sheet(item: Binding(
+            get: { viewModel.folderPickerCard },
+            set: { if $0 == nil { viewModel.dismissFolderPicker() } }
+        )) { card in
+            FolderPickerSheet(viewModel: viewModel, card: card)
         }
         .alert("Doompedia", isPresented: Binding(
             get: { viewModel.message != nil },

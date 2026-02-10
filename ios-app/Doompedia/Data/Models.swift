@@ -4,6 +4,7 @@ enum PersonalizationLevel: String, CaseIterable, Codable {
     case off = "OFF"
     case low = "LOW"
     case medium = "MEDIUM"
+    case high = "HIGH"
 }
 
 enum ThemeMode: String, CaseIterable, Codable {
@@ -16,11 +17,21 @@ struct UserSettings: Codable {
     var language: String = "en"
     var personalizationLevel: PersonalizationLevel = .low
     var themeMode: ThemeMode = .system
+    var accentHex: String = "#0B6E5B"
     var wifiOnlyDownloads: Bool = true
     var manifestURL: String = ""
     var installedPackVersion: Int = 0
     var lastUpdateISO: String = ""
     var lastUpdateStatus: String = ""
+}
+
+struct SaveFolderSummary: Identifiable, Hashable {
+    let folderId: Int64
+    let name: String
+    let isDefault: Bool
+    let articleCount: Int
+
+    var id: Int64 { folderId }
 }
 
 struct ArticleCard: Identifiable, Hashable {

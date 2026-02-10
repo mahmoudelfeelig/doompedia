@@ -73,7 +73,7 @@ final class SQLiteStore {
                             .text(normalizeSearch(row.title)),
                             .text(row.summary),
                             .text(row.wiki_url),
-                            .text(row.topic_key),
+                            .text(normalizeTopicKey(rawTopic: row.topic_key, title: row.title, summary: row.summary)),
                             .double(row.quality_score),
                             .int64(row.is_disambiguation ? 1 : 0),
                             row.source_rev_id.map(SQLiteValue.int64) ?? .null,
@@ -242,17 +242,160 @@ final class SQLiteStore {
 
     func toggleBookmark(pageId: Int64) throws -> Bool {
         try queue.sync {
+            try ensureSaveDefaultsLocked()
             let exists = try scalarInt(sql: "SELECT COUNT(*) FROM bookmarks WHERE page_id = ?", bindings: [.int64(pageId)]) > 0
             if exists {
                 try execute(sql: "DELETE FROM bookmarks WHERE page_id = ?", bindings: [.int64(pageId)])
+                try execute(
+                    sql: "DELETE FROM article_folder_refs WHERE folder_id = 1 AND page_id = ?",
+                    bindings: [.int64(pageId)]
+                )
                 return false
             }
+            let now = Int64(Date().timeIntervalSince1970 * 1000)
             try execute(
                 sql: "INSERT INTO bookmarks (page_id, created_at) VALUES (?, ?)",
-                bindings: [.int64(pageId), .int64(Int64(Date().timeIntervalSince1970 * 1000))]
+                bindings: [.int64(pageId), .int64(now)]
+            )
+            try execute(
+                sql: "INSERT OR REPLACE INTO article_folder_refs (folder_id, page_id, created_at) VALUES (1, ?, ?)",
+                bindings: [.int64(pageId), .int64(now)]
             )
             return true
         }
+    }
+
+    func ensureSaveDefaults() throws {
+        try queue.sync {
+            try ensureSaveDefaultsLocked()
+            try execute(
+                sql: """
+                INSERT OR IGNORE INTO article_folder_refs (folder_id, page_id, created_at)
+                SELECT 1, page_id, created_at FROM bookmarks
+                """
+            )
+        }
+    }
+
+    func saveFoldersWithCounts() throws -> [SaveFolderSummary] {
+        try queue.sync {
+            try ensureSaveDefaultsLocked()
+            let sql = """
+                SELECT f.folder_id, f.name, f.is_default, COUNT(r.page_id) AS article_count
+                FROM save_folders f
+                LEFT JOIN article_folder_refs r ON r.folder_id = f.folder_id
+                GROUP BY f.folder_id
+                ORDER BY f.is_default DESC, f.name ASC
+                """
+            var statement: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
+                throw SQLiteStoreError.prepare(lastError())
+            }
+            defer { sqlite3_finalize(statement) }
+
+            var rows: [SaveFolderSummary] = []
+            while sqlite3_step(statement) == SQLITE_ROW {
+                rows.append(
+                    SaveFolderSummary(
+                        folderId: sqlite3_column_int64(statement, 0),
+                        name: sqliteString(statement, 1),
+                        isDefault: sqlite3_column_int(statement, 2) != 0,
+                        articleCount: Int(sqlite3_column_int64(statement, 3))
+                    )
+                )
+            }
+            return rows
+        }
+    }
+
+    func createFolder(name: String) throws -> Bool {
+        let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleaned.isEmpty { return false }
+        return try queue.sync {
+            try ensureSaveDefaultsLocked()
+            let existing = try scalarInt(sql: "SELECT COUNT(*) FROM save_folders WHERE name = ?", bindings: [.text(cleaned)])
+            if existing > 0 { return false }
+            try execute(
+                sql: "INSERT OR IGNORE INTO save_folders (name, is_default, created_at) VALUES (?, 0, ?)",
+                bindings: [.text(cleaned), .int64(Int64(Date().timeIntervalSince1970 * 1000))]
+            )
+            return true
+        }
+    }
+
+    func deleteFolder(folderID: Int64) throws -> Bool {
+        try queue.sync {
+            try ensureSaveDefaultsLocked()
+            let before = try scalarInt(sql: "SELECT COUNT(*) FROM save_folders WHERE folder_id = ? AND is_default = 0", bindings: [.int64(folderID)])
+            if before == 0 { return false }
+            try execute(sql: "DELETE FROM save_folders WHERE folder_id = ? AND is_default = 0", bindings: [.int64(folderID)])
+            let after = try scalarInt(sql: "SELECT COUNT(*) FROM save_folders WHERE folder_id = ?", bindings: [.int64(folderID)])
+            return before > 0 && after == 0
+        }
+    }
+
+    func folderIDsForArticle(pageID: Int64) throws -> Set<Int64> {
+        try queue.sync {
+            try ensureSaveDefaultsLocked()
+            var statement: OpaquePointer?
+            guard sqlite3_prepare_v2(db, "SELECT folder_id FROM article_folder_refs WHERE page_id = ?", -1, &statement, nil) == SQLITE_OK else {
+                throw SQLiteStoreError.prepare(lastError())
+            }
+            defer { sqlite3_finalize(statement) }
+            bind(.int64(pageID), to: statement, index: 1)
+            var ids: Set<Int64> = []
+            while sqlite3_step(statement) == SQLITE_ROW {
+                ids.insert(sqlite3_column_int64(statement, 0))
+            }
+            return ids
+        }
+    }
+
+    func setFoldersForArticle(pageID: Int64, folderIDs: Set<Int64>) throws {
+        try queue.sync {
+            try ensureSaveDefaultsLocked()
+            let now = Int64(Date().timeIntervalSince1970 * 1000)
+            try execute(sql: "BEGIN TRANSACTION")
+            do {
+                try execute(sql: "DELETE FROM article_folder_refs WHERE page_id = ?", bindings: [.int64(pageID)])
+                for folderID in folderIDs {
+                    try execute(
+                        sql: "INSERT OR REPLACE INTO article_folder_refs (folder_id, page_id, created_at) VALUES (?, ?, ?)",
+                        bindings: [.int64(folderID), .int64(pageID), .int64(now)]
+                    )
+                }
+
+                if folderIDs.contains(1) {
+                    try execute(
+                        sql: "INSERT OR REPLACE INTO bookmarks (page_id, created_at) VALUES (?, ?)",
+                        bindings: [.int64(pageID), .int64(now)]
+                    )
+                } else {
+                    try execute(sql: "DELETE FROM bookmarks WHERE page_id = ?", bindings: [.int64(pageID)])
+                }
+                try execute(sql: "COMMIT")
+            } catch {
+                _ = try? execute(sql: "ROLLBACK")
+                throw error
+            }
+        }
+    }
+
+    func savedCards(folderID: Int64, limit: Int = 400) throws -> [ArticleCard] {
+        try queryCards(
+            sql: """
+            SELECT a.page_id, a.lang, a.title, a.normalized_title, a.summary, a.wiki_url,
+                   a.topic_key, a.quality_score, a.is_disambiguation, a.source_rev_id, a.updated_at,
+                   CASE WHEN b.page_id IS NULL THEN 0 ELSE 1 END AS bookmarked
+            FROM article_folder_refs r
+            JOIN articles a ON a.page_id = r.page_id
+            LEFT JOIN bookmarks b ON b.page_id = a.page_id
+            WHERE r.folder_id = ?
+            ORDER BY r.created_at DESC, a.page_id DESC
+            LIMIT ?
+            """,
+            bindings: [.int64(folderID), .int64(Int64(limit))]
+        )
     }
 
     func deleteArticles(pageIDs: [Int64]) throws {
@@ -269,6 +412,15 @@ final class SQLiteStore {
                 throw error
             }
         }
+    }
+
+    private func ensureSaveDefaultsLocked() throws {
+        try execute(
+            sql: """
+            INSERT OR IGNORE INTO save_folders (folder_id, name, is_default, created_at)
+            VALUES (1, 'Bookmarks', 1, 0)
+            """
+        )
     }
 
     private static func databaseURL(filename: String) throws -> URL {
@@ -315,6 +467,24 @@ final class SQLiteStore {
             )
             """,
             """
+            CREATE TABLE IF NOT EXISTS save_folders (
+                folder_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                is_default INTEGER NOT NULL DEFAULT 0,
+                created_at INTEGER NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE IF NOT EXISTS article_folder_refs (
+                folder_id INTEGER NOT NULL,
+                page_id INTEGER NOT NULL,
+                created_at INTEGER NOT NULL,
+                PRIMARY KEY(folder_id, page_id),
+                FOREIGN KEY(folder_id) REFERENCES save_folders(folder_id) ON DELETE CASCADE,
+                FOREIGN KEY(page_id) REFERENCES articles(page_id) ON DELETE CASCADE
+            )
+            """,
+            """
             CREATE TABLE IF NOT EXISTS history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 page_id INTEGER NOT NULL,
@@ -335,6 +505,10 @@ final class SQLiteStore {
             "CREATE INDEX IF NOT EXISTS idx_articles_lang_topic ON articles(lang, topic_key)",
             "CREATE INDEX IF NOT EXISTS idx_aliases_lang_norm_alias ON aliases(lang, normalized_alias)",
             "CREATE INDEX IF NOT EXISTS idx_history_opened_at ON history(opened_at)",
+            "CREATE INDEX IF NOT EXISTS idx_article_folder_refs_folder ON article_folder_refs(folder_id)",
+            "CREATE INDEX IF NOT EXISTS idx_article_folder_refs_page ON article_folder_refs(page_id)",
+            "INSERT OR IGNORE INTO save_folders (folder_id, name, is_default, created_at) VALUES (1, 'Bookmarks', 1, 0)",
+            "INSERT OR IGNORE INTO article_folder_refs (folder_id, page_id, created_at) SELECT 1, page_id, created_at FROM bookmarks",
         ]
 
         try queue.sync {
@@ -371,7 +545,8 @@ final class SQLiteStore {
         let normalizedTitle = sqliteString(statement, 3)
         let summary = sqliteString(statement, 4)
         let wikiURL = sqliteString(statement, 5)
-        let topicKey = sqliteString(statement, 6)
+        let rawTopicKey = sqliteString(statement, 6)
+        let topicKey = normalizeTopicKey(rawTopic: rawTopicKey, title: title, summary: summary)
         let qualityScore = sqlite3_column_double(statement, 7)
         let isDisambiguation = sqlite3_column_int(statement, 8) != 0
         let sourceRev = sqlite3_column_type(statement, 9) == SQLITE_NULL ? nil : sqlite3_column_int64(statement, 9)
@@ -472,3 +647,46 @@ enum SQLiteValue {
 }
 
 private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+
+private func normalizeTopicKey(rawTopic: String, title: String, summary: String) -> String {
+    let canonical = rawTopic
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .lowercased()
+        .replacingOccurrences(of: "_", with: "-")
+        .replacingOccurrences(of: " ", with: "-")
+
+    let stable = Set([
+        "science", "technology", "history", "geography", "culture",
+        "politics", "economics", "sports", "health", "environment",
+        "society", "biography",
+    ])
+    if stable.contains(canonical) {
+        return canonical
+    }
+
+    if canonical == "history-of" { return "history" }
+    if canonical == "geography-of" { return "geography" }
+    if canonical == "economy-of" { return "economics" }
+    if canonical == "list-of" { return "culture" }
+
+    let text = "\(title) \(summary)".lowercased()
+    let rules: [(String, [String])] = [
+        ("biography", ["born", "died", "actor", "author", "scientist", "politician", "player"]),
+        ("history", ["empire", "war", "century", "kingdom", "revolution", "ancient", "historical"]),
+        ("science", ["physics", "chemistry", "biology", "mathematics", "astronomy", "scientific"]),
+        ("technology", ["software", "computer", "internet", "digital", "algorithm", "device"]),
+        ("geography", ["river", "mountain", "city", "country", "region", "province", "capital"]),
+        ("politics", ["election", "government", "parliament", "minister", "policy", "party"]),
+        ("economics", ["economy", "market", "trade", "finance", "currency", "industry"]),
+        ("health", ["disease", "medical", "medicine", "health", "hospital", "symptom"]),
+        ("sports", ["football", "basketball", "olympic", "league", "athlete", "championship"]),
+        ("environment", ["climate", "ecology", "forest", "wildlife", "pollution", "conservation"]),
+        ("culture", ["music", "film", "literature", "art", "religion", "language"]),
+    ]
+    for (topic, keywords) in rules {
+        if keywords.contains(where: { text.contains($0) }) {
+            return topic
+        }
+    }
+    return "general"
+}

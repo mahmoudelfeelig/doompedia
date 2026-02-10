@@ -20,7 +20,8 @@ class DoompediaApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
-        PackUpdateWorker.schedule(this)
+        // Updates are manual-only for now; cancel any previously scheduled periodic worker.
+        PackUpdateWorker.cancel(this)
     }
 }
 

@@ -58,6 +58,7 @@ data class ShardArticle(
     val wiki_url: String,
     val topic_key: String,
     val quality_score: Double,
+    @Serializable(with = FlexibleBooleanSerializer::class)
     val is_disambiguation: Boolean = false,
     val source_rev_id: Long? = null,
     val updated_at: String,

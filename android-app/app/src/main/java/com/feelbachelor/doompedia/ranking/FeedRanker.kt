@@ -149,11 +149,11 @@ class FeedRanker(
         isExploration: Boolean,
     ): String {
         val reasons = mutableListOf<String>()
-        if (interest > 0.15) reasons += "matches your $topic interest"
-        if (novelty > 0.0) reasons += "adds novelty"
-        if (diversity > 0.0) reasons += "improves topic diversity"
-        if (isExploration) reasons += "keeps exploration healthy"
-        if (reasons.isEmpty()) reasons += "high quality summary"
-        return reasons.joinToString(separator = ", ", prefix = "Recommended because it ")
+        if (interest > 0.15) reasons += "you've shown interest in ${topic.replace('-', ' ')} topics"
+        if (novelty > 0.0) reasons += "it adds novelty to avoid repetition"
+        if (diversity > 0.0) reasons += "it improves topic diversity in your feed"
+        if (isExploration) reasons += "it keeps a healthy exploration ratio"
+        if (reasons.isEmpty()) reasons += "it is a strong quality candidate"
+        return "Shown because " + reasons.joinToString(separator = "; ") + "."
     }
 }

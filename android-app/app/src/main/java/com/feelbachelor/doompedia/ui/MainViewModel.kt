@@ -5,9 +5,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.feelbachelor.doompedia.AppContainer
 import com.feelbachelor.doompedia.data.repo.UserSettings
+import com.feelbachelor.doompedia.data.repo.WikiRepository
 import com.feelbachelor.doompedia.domain.ArticleCard
 import com.feelbachelor.doompedia.domain.PersonalizationLevel
 import com.feelbachelor.doompedia.domain.RankedCard
+import com.feelbachelor.doompedia.domain.SaveFolderSummary
 import com.feelbachelor.doompedia.domain.ThemeMode
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,6 +21,11 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+data class FolderPickerState(
+    val card: ArticleCard,
+    val selectedFolderIds: Set<Long> = emptySet(),
+)
+
 data class MainUiState(
     val settings: UserSettings = UserSettings(),
     val query: String = "",
@@ -26,12 +33,17 @@ data class MainUiState(
     val updateInProgress: Boolean = false,
     val feed: List<RankedCard> = emptyList(),
     val searchResults: List<ArticleCard> = emptyList(),
+    val folders: List<SaveFolderSummary> = emptyList(),
+    val selectedFolderId: Long = WikiRepository.DEFAULT_BOOKMARKS_FOLDER_ID,
+    val savedCards: List<ArticleCard> = emptyList(),
+    val folderPicker: FolderPickerState? = null,
     val error: String? = null,
 )
 
 sealed interface UiEvent {
     data class OpenUrl(val url: String) : UiEvent
     data class Snackbar(val message: String) : UiEvent
+    data class CopyToClipboard(val text: String, val message: String) : UiEvent
 }
 
 class MainViewModel(
@@ -45,8 +57,14 @@ class MainViewModel(
 
     init {
         viewModelScope.launch {
-            runCatching { container.bootstrapper.ensureSeedData() }
-                .onFailure { error -> _uiState.update { it.copy(error = error.message) } }
+            runCatching {
+                container.bootstrapper.ensureSeedData()
+                container.repository.ensureDefaults()
+            }.onFailure { error ->
+                _uiState.update { it.copy(error = error.message) }
+            }
+            refreshSavedData()
+            refreshFeed()
         }
 
         viewModelScope.launch {
@@ -100,10 +118,134 @@ class MainViewModel(
         }
     }
 
+    fun refreshSavedData() {
+        viewModelScope.launch {
+            runCatching {
+                val folders = container.repository.saveFolders()
+                val selected = if (folders.any { it.folderId == _uiState.value.selectedFolderId }) {
+                    _uiState.value.selectedFolderId
+                } else {
+                    folders.firstOrNull()?.folderId ?: WikiRepository.DEFAULT_BOOKMARKS_FOLDER_ID
+                }
+                val cards = if (folders.isNotEmpty()) {
+                    container.repository.savedCards(selected)
+                } else {
+                    emptyList()
+                }
+                _uiState.update {
+                    it.copy(
+                        folders = folders,
+                        selectedFolderId = selected,
+                        savedCards = cards,
+                    )
+                }
+            }.onFailure { error ->
+                _events.emit(UiEvent.Snackbar(error.message ?: "Could not load saved folders"))
+            }
+        }
+    }
+
+    fun selectSavedFolder(folderId: Long) {
+        viewModelScope.launch {
+            runCatching {
+                val cards = container.repository.savedCards(folderId)
+                _uiState.update {
+                    it.copy(
+                        selectedFolderId = folderId,
+                        savedCards = cards,
+                    )
+                }
+            }.onFailure { error ->
+                _events.emit(UiEvent.Snackbar(error.message ?: "Could not load folder"))
+            }
+        }
+    }
+
+    fun createFolder(name: String) {
+        viewModelScope.launch {
+            val created = runCatching { container.repository.createFolder(name) }.getOrDefault(false)
+            if (!created) {
+                _events.emit(UiEvent.Snackbar("Folder name is invalid or already exists"))
+                return@launch
+            }
+            refreshSavedData()
+            _events.emit(UiEvent.Snackbar("Folder created"))
+        }
+    }
+
+    fun deleteFolder(folderId: Long) {
+        viewModelScope.launch {
+            val deleted = runCatching { container.repository.deleteFolder(folderId) }.getOrDefault(false)
+            if (!deleted) {
+                _events.emit(UiEvent.Snackbar("This folder cannot be removed"))
+                return@launch
+            }
+            refreshSavedData()
+            _events.emit(UiEvent.Snackbar("Folder removed"))
+        }
+    }
+
+    fun showFolderPicker(card: ArticleCard) {
+        viewModelScope.launch {
+            val selected = runCatching {
+                container.repository.selectedFolderIds(card.pageId)
+            }.getOrElse { emptySet() }
+            _uiState.update {
+                it.copy(
+                    folderPicker = FolderPickerState(
+                        card = card,
+                        selectedFolderIds = selected,
+                    )
+                )
+            }
+        }
+    }
+
+    fun toggleFolderSelection(folderId: Long) {
+        _uiState.update { state ->
+            val picker = state.folderPicker ?: return@update state
+            val updated = picker.selectedFolderIds.toMutableSet().also { selected ->
+                if (!selected.add(folderId)) selected.remove(folderId)
+            }
+            state.copy(folderPicker = picker.copy(selectedFolderIds = updated))
+        }
+    }
+
+    fun hideFolderPicker() {
+        _uiState.update { it.copy(folderPicker = null) }
+    }
+
+    fun applyFolderPickerSelection() {
+        viewModelScope.launch {
+            val picker = _uiState.value.folderPicker ?: return@launch
+            runCatching {
+                container.repository.setFoldersForArticle(
+                    pageId = picker.card.pageId,
+                    folderIds = picker.selectedFolderIds,
+                )
+            }.onSuccess {
+                hideFolderPicker()
+                refreshFeed()
+                refreshSavedData()
+                _events.emit(UiEvent.Snackbar("Saved folders updated"))
+            }.onFailure { error ->
+                _events.emit(UiEvent.Snackbar(error.message ?: "Could not update folders"))
+            }
+        }
+    }
+
     fun onOpenCard(card: ArticleCard) {
         viewModelScope.launch {
             container.repository.recordOpen(card, _uiState.value.settings.personalizationLevel)
             _events.emit(UiEvent.OpenUrl(card.wikiUrl))
+            refreshFeed()
+        }
+    }
+
+    fun onMoreLike(card: ArticleCard) {
+        viewModelScope.launch {
+            container.repository.recordMoreLike(card, _uiState.value.settings.personalizationLevel)
+            _events.emit(UiEvent.Snackbar("Feed updated to show more ${card.topicKey}"))
             refreshFeed()
         }
     }
@@ -119,9 +261,10 @@ class MainViewModel(
     fun onToggleBookmark(card: ArticleCard) {
         viewModelScope.launch {
             val bookmarked = container.repository.toggleBookmark(card.pageId)
-            val message = if (bookmarked) "Saved bookmark" else "Removed bookmark"
+            val message = if (bookmarked) "Saved to Bookmarks" else "Removed from Bookmarks"
             _events.emit(UiEvent.Snackbar(message))
             refreshFeed()
+            refreshSavedData()
         }
     }
 
@@ -143,6 +286,12 @@ class MainViewModel(
         }
     }
 
+    fun setAccentHex(hex: String) {
+        viewModelScope.launch {
+            container.preferences.setAccentHex(hex)
+        }
+    }
+
     fun setWifiOnly(enabled: Boolean) {
         viewModelScope.launch {
             container.preferences.setWifiOnly(enabled)
@@ -152,6 +301,31 @@ class MainViewModel(
     fun setManifestUrl(url: String) {
         viewModelScope.launch {
             container.preferences.setManifestUrl(url)
+        }
+    }
+
+    fun exportSettings() {
+        viewModelScope.launch {
+            val settings = _uiState.value.settings
+            val payload = container.preferences.exportToJson(settings)
+            _events.emit(
+                UiEvent.CopyToClipboard(
+                    text = payload,
+                    message = "Settings JSON copied to clipboard",
+                )
+            )
+        }
+    }
+
+    fun importSettings(payload: String) {
+        viewModelScope.launch {
+            val result = container.preferences.importFromJson(payload)
+            result.onSuccess {
+                _events.emit(UiEvent.Snackbar("Settings imported"))
+                refreshFeed()
+            }.onFailure { error ->
+                _events.emit(UiEvent.Snackbar(error.message ?: "Could not import settings JSON"))
+            }
         }
     }
 

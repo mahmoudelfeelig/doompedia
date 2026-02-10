@@ -43,7 +43,11 @@ class DeltaApplier(
                                 normalizedTitle = record.normalized_title.ifBlank { normalizeSearch(record.title) },
                                 summary = record.summary,
                                 wikiUrl = record.wiki_url,
-                                topicKey = record.topic_key,
+                                topicKey = TopicClassifier.normalizeTopic(
+                                    rawTopic = record.topic_key,
+                                    title = record.title,
+                                    summary = record.summary,
+                                ),
                                 qualityScore = record.quality_score,
                                 isDisambiguation = record.is_disambiguation,
                                 sourceRevId = record.source_rev_id,

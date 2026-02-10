@@ -155,11 +155,11 @@ struct FeedRanker {
         isExploration: Bool
     ) -> String {
         var reasons: [String] = []
-        if interest > 0.15 { reasons.append("matches your \(topic) interest") }
-        if novelty > 0 { reasons.append("adds novelty") }
-        if diversity > 0 { reasons.append("improves topic diversity") }
-        if isExploration { reasons.append("keeps exploration healthy") }
-        if reasons.isEmpty { reasons.append("is high quality") }
-        return "Recommended because it " + reasons.joined(separator: ", ")
+        if interest > 0.15 { reasons.append("you've shown interest in \(topic.replacingOccurrences(of: "-", with: " ")) topics") }
+        if novelty > 0 { reasons.append("it adds novelty to avoid repetition") }
+        if diversity > 0 { reasons.append("it improves topic diversity in your feed") }
+        if isExploration { reasons.append("it keeps a healthy exploration ratio") }
+        if reasons.isEmpty { reasons.append("it is a strong quality candidate") }
+        return "Shown because " + reasons.joined(separator: "; ") + "."
     }
 }

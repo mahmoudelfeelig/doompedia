@@ -19,8 +19,8 @@ import com.feelbachelor.doompedia.domain.ThemeMode
 
 private enum class Tab(val title: String) {
     FEED("Feed"),
+    SAVED("Saved"),
     SETTINGS("Settings"),
-    ATTRIBUTION("Attribution"),
 }
 
 @Composable
@@ -31,12 +31,24 @@ fun AppScreen(
     onRefresh: () -> Unit,
     onOpenCard: (ArticleCard) -> Unit,
     onToggleBookmark: (ArticleCard) -> Unit,
+    onMoreLike: (ArticleCard) -> Unit,
     onLessLike: (ArticleCard) -> Unit,
+    onShowFolderPicker: (ArticleCard) -> Unit,
+    onToggleFolderSelection: (Long) -> Unit,
+    onApplyFolderSelection: () -> Unit,
+    onDismissFolderPicker: () -> Unit,
+    onRefreshSaved: () -> Unit,
+    onSelectSavedFolder: (Long) -> Unit,
+    onCreateFolder: (String) -> Unit,
+    onDeleteFolder: (Long) -> Unit,
     onSetPersonalization: (PersonalizationLevel) -> Unit,
     onSetThemeMode: (ThemeMode) -> Unit,
+    onSetAccentHex: (String) -> Unit,
     onSetWifiOnly: (Boolean) -> Unit,
     onSetManifestUrl: (String) -> Unit,
     onCheckUpdatesNow: () -> Unit,
+    onExportSettings: () -> Unit,
+    onImportSettings: (String) -> Unit,
     onOpenExternalUrl: (String) -> Unit,
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -65,7 +77,24 @@ fun AppScreen(
                 onRefresh = onRefresh,
                 onOpenCard = onOpenCard,
                 onToggleBookmark = onToggleBookmark,
+                onMoreLike = onMoreLike,
                 onLessLike = onLessLike,
+                onShowFolderPicker = onShowFolderPicker,
+                onToggleFolderSelection = onToggleFolderSelection,
+                onApplyFolderSelection = onApplyFolderSelection,
+                onDismissFolderPicker = onDismissFolderPicker,
+            )
+
+            Tab.SAVED -> SavedScreen(
+                paddingValues = padding,
+                state = state,
+                onRefreshSaved = onRefreshSaved,
+                onSelectFolder = onSelectSavedFolder,
+                onCreateFolder = onCreateFolder,
+                onDeleteFolder = onDeleteFolder,
+                onOpenCard = onOpenCard,
+                onToggleBookmark = onToggleBookmark,
+                onShowFolderPicker = onShowFolderPicker,
             )
 
             Tab.SETTINGS -> SettingsScreen(
@@ -74,13 +103,12 @@ fun AppScreen(
                 updateInProgress = state.updateInProgress,
                 onSetPersonalization = onSetPersonalization,
                 onSetThemeMode = onSetThemeMode,
+                onSetAccentHex = onSetAccentHex,
                 onSetWifiOnly = onSetWifiOnly,
                 onSetManifestUrl = onSetManifestUrl,
                 onCheckUpdatesNow = onCheckUpdatesNow,
-            )
-
-            Tab.ATTRIBUTION -> AttributionScreen(
-                paddingValues = padding,
+                onExportSettings = onExportSettings,
+                onImportSettings = onImportSettings,
                 onOpenExternalUrl = onOpenExternalUrl,
             )
         }

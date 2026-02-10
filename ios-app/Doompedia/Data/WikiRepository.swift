@@ -4,6 +4,7 @@ final class WikiRepository {
     private let store: SQLiteStore
     private let config: RankingConfig
     private let ranker: FeedRanker
+    static let defaultBookmarksFolderID: Int64 = 1
 
     init(store: SQLiteStore, config: RankingConfig) {
         self.store = store
@@ -13,6 +14,7 @@ final class WikiRepository {
 
     func bootstrap() throws {
         try SeedBootstrapper.ensureSeedData(store: store)
+        try store.ensureSaveDefaults()
     }
 
     func loadFeed(language: String, level: PersonalizationLevel, limit: Int = 50) throws -> [RankedCard] {
@@ -84,8 +86,42 @@ final class WikiRepository {
         try updateAffinity(language: card.lang, topic: card.topicKey, delta: hideRate * levelFactor)
     }
 
+    func recordMoreLike(card: ArticleCard, level: PersonalizationLevel) throws {
+        let levelFactor = config.personalization.levels[level.rawValue] ?? 0.0
+        guard levelFactor > 0 else { return }
+
+        let likeRate = config.personalization.learningRates["like"]
+            ?? config.personalization.learningRates["bookmark"]
+            ?? 0.7
+        try updateAffinity(language: card.lang, topic: card.topicKey, delta: likeRate * levelFactor)
+    }
+
     func toggleBookmark(pageId: Int64) throws -> Bool {
         try store.toggleBookmark(pageId: pageId)
+    }
+
+    func saveFolders() throws -> [SaveFolderSummary] {
+        try store.saveFoldersWithCounts()
+    }
+
+    func createFolder(name: String) throws -> Bool {
+        try store.createFolder(name: name)
+    }
+
+    func deleteFolder(folderID: Int64) throws -> Bool {
+        try store.deleteFolder(folderID: folderID)
+    }
+
+    func selectedFolderIDs(pageID: Int64) throws -> Set<Int64> {
+        try store.folderIDsForArticle(pageID: pageID)
+    }
+
+    func setFoldersForArticle(pageID: Int64, folderIDs: Set<Int64>) throws {
+        try store.setFoldersForArticle(pageID: pageID, folderIDs: folderIDs)
+    }
+
+    func savedCards(folderID: Int64) throws -> [ArticleCard] {
+        try store.savedCards(folderID: folderID)
     }
 
     private func updateAffinity(language: String, topic: String, delta: Double) throws {

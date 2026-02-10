@@ -18,6 +18,7 @@ private data class SeedRow(
     val wiki_url: String,
     val topic_key: String,
     val quality_score: Double = 0.5,
+    @Serializable(with = FlexibleBooleanSerializer::class)
     val is_disambiguation: Boolean = false,
     val source_rev_id: Long? = null,
     val updated_at: String,
@@ -50,7 +51,11 @@ class AssetBootstrapper(
                 normalizedTitle = normalizeSearch(row.title),
                 summary = row.summary,
                 wikiUrl = row.wiki_url,
-                topicKey = row.topic_key,
+                topicKey = TopicClassifier.normalizeTopic(
+                    rawTopic = row.topic_key,
+                    title = row.title,
+                    summary = row.summary,
+                ),
                 qualityScore = row.quality_score,
                 isDisambiguation = row.is_disambiguation,
                 sourceRevId = row.source_rev_id,
