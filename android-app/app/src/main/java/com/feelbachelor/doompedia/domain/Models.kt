@@ -45,3 +45,8 @@ enum class ThemeMode {
     LIGHT,
     DARK,
 }
+
+enum class FeedMode {
+    OFFLINE,
+    ONLINE,
+}

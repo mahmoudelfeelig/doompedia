@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import com.feelbachelor.doompedia.data.repo.UserSettings
+import com.feelbachelor.doompedia.domain.FeedMode
 import com.feelbachelor.doompedia.domain.PersonalizationLevel
 import com.feelbachelor.doompedia.domain.ThemeMode
 import com.feelbachelor.doompedia.ui.theme.parseHexColor
@@ -38,6 +39,8 @@ import kotlin.math.roundToInt
 fun SettingsScreen(
     paddingValues: PaddingValues,
     settings: UserSettings,
+    effectiveFeedMode: FeedMode,
+    onSetFeedMode: (FeedMode) -> Unit,
     onSetPersonalization: (PersonalizationLevel) -> Unit,
     onSetThemeMode: (ThemeMode) -> Unit,
     onSetAccentHex: (String) -> Unit,
@@ -92,6 +95,31 @@ fun SettingsScreen(
             Text(
                 text = "Settings",
                 style = MaterialTheme.typography.headlineSmall,
+            )
+        }
+
+        item {
+            Text(
+                text = "Mode",
+                style = MaterialTheme.typography.titleMedium,
+            )
+        }
+        item {
+            EnumOptions(
+                selected = settings.feedMode,
+                values = FeedMode.entries,
+                label = { it.name },
+                onSelect = onSetFeedMode,
+            )
+        }
+        item {
+            val modeText = when (settings.feedMode) {
+                FeedMode.OFFLINE -> "OFFLINE uses downloaded packs and local cache only."
+                FeedMode.ONLINE -> "ONLINE fetches live Wikipedia summaries and caches them locally."
+            }
+            Text(
+                text = modeText + if (effectiveFeedMode != settings.feedMode) " No internet detected, so offline feed is active right now." else "",
+                style = MaterialTheme.typography.bodySmall,
             )
         }
 

@@ -30,10 +30,13 @@ fun PacksScreen(
     updateInProgress: Boolean,
     packs: List<PackOption>,
     onChoosePack: (PackOption) -> Unit,
+    onAddPackByManifestUrl: (String) -> Unit,
+    onRemovePack: (PackOption) -> Unit,
     onSetManifestUrl: (String) -> Unit,
     onCheckUpdatesNow: () -> Unit,
 ) {
     var manifestUrlDraft by remember(settings.manifestUrl) { mutableStateOf(settings.manifestUrl) }
+    var addManifestDraft by remember { mutableStateOf("") }
     LaunchedEffect(settings.manifestUrl) {
         if (settings.manifestUrl != manifestUrlDraft) {
             manifestUrlDraft = settings.manifestUrl
@@ -63,10 +66,22 @@ fun PacksScreen(
                     Text(text = pack.title, style = MaterialTheme.typography.titleMedium)
                     Text(text = pack.subtitle, style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        text = "Download: ${pack.downloadSize} | Installed: ${pack.installSize}",
+                        text = "Articles: ${pack.articleCount} · Shards: ${pack.shardCount}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    Text(
+                        text = "Download: ${pack.downloadSize} · Installed: ${pack.installSize}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (pack.includedTopics.isNotEmpty()) {
+                        Text(
+                            text = "Includes: ${pack.includedTopics.joinToString(limit = 8, truncated = \"…\")}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
                             onClick = { onChoosePack(pack) },
@@ -74,7 +89,50 @@ fun PacksScreen(
                         ) {
                             Text(if (pack.available) "Use pack" else "Coming soon")
                         }
+                        if (pack.removable) {
+                            Button(
+                                onClick = { onRemovePack(pack) },
+                                enabled = !updateInProgress,
+                            ) {
+                                Text("Remove")
+                            }
+                        }
                     }
+                }
+            }
+        }
+
+        item {
+            Text(
+                text = "Add pack by manifest URL",
+                style = MaterialTheme.typography.titleMedium,
+            )
+        }
+
+        item {
+            OutlinedTextField(
+                modifier = Modifier.fillMaxWidth(),
+                value = addManifestDraft,
+                onValueChange = { addManifestDraft = it },
+                label = { Text("New pack manifest URL") },
+                placeholder = { Text("https://packs.example.com/packs/<id>/v1/manifest.json") },
+                singleLine = true,
+            )
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(
+                    onClick = {
+                        onAddPackByManifestUrl(addManifestDraft)
+                        addManifestDraft = ""
+                    },
+                    enabled = addManifestDraft.isNotBlank() && !updateInProgress,
+                ) {
+                    Text("Add pack")
                 }
             }
         }

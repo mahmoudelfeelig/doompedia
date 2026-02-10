@@ -2,6 +2,7 @@ package com.feelbachelor.doompedia.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -10,15 +11,21 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.pullrefresh.ExperimentalMaterialApi
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +34,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -36,7 +44,18 @@ import androidx.compose.ui.unit.dp
 import com.feelbachelor.doompedia.data.repo.WikiRepository
 import com.feelbachelor.doompedia.domain.ArticleCard
 import com.feelbachelor.doompedia.domain.RankedCard
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 
+enum class FeedSortOption(val label: String) {
+    RELEVANCE("Recommended"),
+    TITLE_ASC("A-Z"),
+    TITLE_DESC("Z-A"),
+    QUALITY("Quality"),
+}
+
+@OptIn(ExperimentalMaterialApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun FeedScreen(
     paddingValues: PaddingValues,
@@ -57,6 +76,50 @@ fun FeedScreen(
     } else {
         state.searchResults.map { card -> RankedCard(card = card, score = 0.0, why = "Search match by title or alias") }
     }
+    var selectedSort by rememberSaveable { mutableStateOf(FeedSortOption.RELEVANCE) }
+    var selectedFilter by rememberSaveable { mutableStateOf("All") }
+    var requestedBootstrapRefresh by rememberSaveable { mutableStateOf(false) }
+
+    val availableFilters = remember(cards) {
+        cards
+            .flatMap { ranked -> buildTopicKeywords(ranked.card).filterNot { it.equals("Saved", ignoreCase = true) } }
+            .distinct()
+            .sorted()
+            .take(14)
+    }
+    val activeCards = remember(cards, selectedSort, selectedFilter) {
+        val filtered = if (selectedFilter == "All") {
+            cards
+        } else {
+            cards.filter { ranked ->
+                buildTopicKeywords(ranked.card).any { it.equals(selectedFilter, ignoreCase = true) }
+            }
+        }
+        when (selectedSort) {
+            FeedSortOption.RELEVANCE -> filtered
+            FeedSortOption.TITLE_ASC -> filtered.sortedBy { it.card.title.lowercase() }
+            FeedSortOption.TITLE_DESC -> filtered.sortedByDescending { it.card.title.lowercase() }
+            FeedSortOption.QUALITY -> filtered.sortedByDescending { it.card.qualityScore }
+        }
+    }
+
+    LaunchedEffect(availableFilters, selectedFilter) {
+        if (selectedFilter != "All" && selectedFilter !in availableFilters) {
+            selectedFilter = "All"
+        }
+    }
+
+    LaunchedEffect(state.loading, state.query, cards.size) {
+        if (!requestedBootstrapRefresh && !state.loading && state.query.isBlank() && cards.isEmpty()) {
+            requestedBootstrapRefresh = true
+            onRefresh()
+        }
+    }
+
+    val pullRefreshState = rememberPullRefreshState(
+        refreshing = state.loading,
+        onRefresh = onRefresh,
+    )
 
     Column(
         modifier = Modifier
@@ -72,6 +135,49 @@ fun FeedScreen(
             placeholder = { Text("Try: Alan Turing") },
             singleLine = true,
         )
+
+        Text(
+            text = "Sort",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FeedSortOption.entries.forEach { option ->
+                FilterChip(
+                    selected = selectedSort == option,
+                    onClick = { selectedSort = option },
+                    label = { Text(option.label) },
+                )
+            }
+        }
+
+        if (availableFilters.isNotEmpty()) {
+            Text(
+                text = "Filters",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(
+                    selected = selectedFilter == "All",
+                    onClick = { selectedFilter = "All" },
+                    label = { Text("All") },
+                )
+                availableFilters.forEach { filter ->
+                    FilterChip(
+                        selected = selectedFilter == filter,
+                        onClick = { selectedFilter = filter },
+                        label = { Text(filter) },
+                    )
+                }
+            }
+        }
 
         if (state.loading) {
             Row(
@@ -92,25 +198,31 @@ fun FeedScreen(
             )
         }
 
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(bottom = 120.dp),
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pullRefresh(pullRefreshState),
         ) {
-            item {
-                TextButton(onClick = onRefresh) {
-                    Text("Refresh feed")
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(bottom = 120.dp),
+            ) {
+                items(activeCards, key = { it.card.pageId }) { item ->
+                    ArticleCardItem(
+                        item = item,
+                        onOpenCard = onOpenCard,
+                        onToggleBookmark = onToggleBookmark,
+                        onMoreLike = onMoreLike,
+                        onLessLike = onLessLike,
+                        onShowFolderPicker = onShowFolderPicker,
+                    )
                 }
             }
-            items(cards, key = { it.card.pageId }) { item ->
-                ArticleCardItem(
-                    item = item,
-                    onOpenCard = onOpenCard,
-                    onToggleBookmark = onToggleBookmark,
-                    onMoreLike = onMoreLike,
-                    onLessLike = onLessLike,
-                    onShowFolderPicker = onShowFolderPicker,
-                )
-            }
+            PullRefreshIndicator(
+                refreshing = state.loading,
+                state = pullRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
         }
     }
 
@@ -284,6 +396,12 @@ private fun buildTopicKeywords(card: ArticleCard): List<String> {
     val tags = linkedSetOf<String>()
     tags += prettyTopic(card.topicKey)
 
+    if (card.updatedAt.startsWith("1970-")) {
+        tags += "Offline Pack"
+    } else {
+        tags += "Live Cache"
+    }
+
     keywordBuckets.forEach { (topic, keywords) ->
         if (keywords.any { keyword -> text.contains(keyword) }) {
             tags += prettyTopic(topic)
@@ -309,6 +427,10 @@ private val keywordBuckets: List<Pair<String, List<String>>> = listOf(
     "geography" to listOf("city", "country", "river", "mountain", "region", "capital"),
     "economics" to listOf("economy", "finance", "trade", "market", "industry", "currency"),
     "sports" to listOf("football", "basketball", "olympic", "athlete", "league", "championship"),
+    "education" to listOf("university", "school", "college", "academy", "curriculum", "education"),
+    "law" to listOf("law", "court", "judge", "legal", "constitution", "act"),
+    "philosophy" to listOf("philosophy", "philosopher", "ethics", "logic", "metaphysics"),
+    "art" to listOf("painting", "sculpture", "artist", "gallery", "visual art"),
     "health" to listOf("medicine", "disease", "medical", "hospital", "health", "symptom"),
 )
 

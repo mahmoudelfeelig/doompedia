@@ -11,6 +11,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.feelbachelor.doompedia.domain.PersonalizationLevel
 import com.feelbachelor.doompedia.domain.ReadSort
 import com.feelbachelor.doompedia.domain.ThemeMode
+import com.feelbachelor.doompedia.domain.FeedMode
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -20,6 +21,7 @@ private val Context.dataStore by preferencesDataStore(name = "doompedia_settings
 
 data class UserSettings(
     val language: String = "en",
+    val feedMode: FeedMode = FeedMode.OFFLINE,
     val personalizationLevel: PersonalizationLevel = PersonalizationLevel.LOW,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val accentHex: String = "#0B6E5B",
@@ -32,12 +34,14 @@ data class UserSettings(
     val installedPackVersion: Int = 0,
     val lastUpdateIso: String = "",
     val lastUpdateStatus: String = "",
+    val customPacksJson: String = "[]",
 )
 
 class UserPreferencesStore(
     private val context: Context,
 ) {
     private val languageKey = stringPreferencesKey("language")
+    private val feedModeKey = stringPreferencesKey("feed_mode")
     private val personalizationKey = stringPreferencesKey("personalization_level")
     private val themeKey = stringPreferencesKey("theme_mode")
     private val accentHexKey = stringPreferencesKey("accent_hex")
@@ -50,11 +54,16 @@ class UserPreferencesStore(
     private val installedPackVersionKey = intPreferencesKey("installed_pack_version")
     private val lastUpdateIsoKey = stringPreferencesKey("last_update_iso")
     private val lastUpdateStatusKey = stringPreferencesKey("last_update_status")
+    private val customPacksKey = stringPreferencesKey("custom_packs_json")
 
     val settings: Flow<UserSettings> = context.dataStore.data.map(::toSettings)
 
     suspend fun setLanguage(language: String) {
         context.dataStore.edit { prefs -> prefs[languageKey] = language }
+    }
+
+    suspend fun setFeedMode(feedMode: FeedMode) {
+        context.dataStore.edit { prefs -> prefs[feedModeKey] = feedMode.name }
     }
 
     suspend fun setPersonalization(level: PersonalizationLevel) {
@@ -106,9 +115,14 @@ class UserPreferencesStore(
         }
     }
 
+    suspend fun setCustomPacksJson(payload: String) {
+        context.dataStore.edit { prefs -> prefs[customPacksKey] = payload }
+    }
+
     fun exportToJson(settings: UserSettings): String {
         val payload = JSONObject()
             .put("language", settings.language)
+            .put("feedMode", settings.feedMode.name)
             .put("personalizationLevel", settings.personalizationLevel.name)
             .put("themeMode", settings.themeMode.name)
             .put("accentHex", settings.accentHex)
@@ -119,6 +133,7 @@ class UserPreferencesStore(
             .put("wifiOnlyDownloads", settings.wifiOnlyDownloads)
             .put("manifestUrl", settings.manifestUrl)
             .put("installedPackVersion", settings.installedPackVersion)
+            .put("customPacksJson", settings.customPacksJson)
         return payload.toString(2)
     }
 
@@ -127,6 +142,10 @@ class UserPreferencesStore(
             val root = JSONObject(payload)
             context.dataStore.edit { prefs ->
                 root.optString("language").takeIf { it.isNotBlank() }?.let { prefs[languageKey] = it }
+                root.optString("feedMode")
+                    .uppercase()
+                    .let { raw -> FeedMode.entries.firstOrNull { it.name == raw } }
+                    ?.let { prefs[feedModeKey] = it.name }
                 root.optString("personalizationLevel")
                     .uppercase()
                     .let { raw ->
@@ -160,6 +179,7 @@ class UserPreferencesStore(
                 if (root.has("installedPackVersion")) {
                     prefs[installedPackVersionKey] = root.optInt("installedPackVersion", 0).coerceAtLeast(0)
                 }
+                root.optString("customPacksJson").takeIf { it.isNotBlank() }?.let { prefs[customPacksKey] = it.trim() }
             }
             settings.first()
         }
@@ -169,6 +189,10 @@ class UserPreferencesStore(
         val level = prefs[personalizationKey]?.let {
             PersonalizationLevel.entries.firstOrNull { entry -> entry.name == it }
         } ?: PersonalizationLevel.LOW
+
+        val feedMode = prefs[feedModeKey]?.let {
+            FeedMode.entries.firstOrNull { entry -> entry.name == it }
+        } ?: FeedMode.OFFLINE
 
         val theme = prefs[themeKey]?.let {
             ThemeMode.entries.firstOrNull { entry -> entry.name == it }
@@ -180,6 +204,7 @@ class UserPreferencesStore(
 
         return UserSettings(
             language = prefs[languageKey] ?: "en",
+            feedMode = feedMode,
             personalizationLevel = level,
             themeMode = theme,
             accentHex = prefs[accentHexKey] ?: "#0B6E5B",
@@ -192,6 +217,7 @@ class UserPreferencesStore(
             installedPackVersion = prefs[installedPackVersionKey] ?: 0,
             lastUpdateIso = prefs[lastUpdateIsoKey] ?: "",
             lastUpdateStatus = prefs[lastUpdateStatusKey] ?: "",
+            customPacksJson = prefs[customPacksKey] ?: "[]",
         )
     }
 }

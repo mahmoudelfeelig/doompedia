@@ -1,12 +1,16 @@
 package com.feelbachelor.doompedia.ui
 
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.feelbachelor.doompedia.AppContainer
+import com.feelbachelor.doompedia.data.importer.PackManifest
 import com.feelbachelor.doompedia.data.repo.UserSettings
 import com.feelbachelor.doompedia.data.repo.WikiRepository
 import com.feelbachelor.doompedia.domain.ArticleCard
+import com.feelbachelor.doompedia.domain.FeedMode
 import com.feelbachelor.doompedia.domain.PersonalizationLevel
 import com.feelbachelor.doompedia.domain.RankedCard
 import com.feelbachelor.doompedia.domain.ReadSort
@@ -20,7 +24,13 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.URL
 
 data class PackOption(
     val id: String,
@@ -30,6 +40,10 @@ data class PackOption(
     val installSize: String,
     val manifestUrl: String,
     val available: Boolean = true,
+    val articleCount: Int = 0,
+    val shardCount: Int = 0,
+    val includedTopics: List<String> = emptyList(),
+    val removable: Boolean = false,
 )
 
 data class FolderPickerState(
@@ -49,6 +63,7 @@ data class MainUiState(
     val savedCards: List<ArticleCard> = emptyList(),
     val folderPicker: FolderPickerState? = null,
     val packCatalog: List<PackOption> = defaultPackCatalog(),
+    val effectiveFeedMode: FeedMode = FeedMode.OFFLINE,
     val error: String? = null,
 )
 
@@ -66,6 +81,7 @@ class MainViewModel(
 
     private val _events = MutableSharedFlow<UiEvent>()
     val events: SharedFlow<UiEvent> = _events.asSharedFlow()
+    private val manifestJson = Json { ignoreUnknownKeys = true }
 
     init {
         viewModelScope.launch {
@@ -84,13 +100,20 @@ class MainViewModel(
             container.preferences.settings.collectLatest { settings ->
                 val shouldRefreshFeed = previousSettings == null ||
                     previousSettings?.language != settings.language ||
-                    previousSettings?.personalizationLevel != settings.personalizationLevel
+                    previousSettings?.personalizationLevel != settings.personalizationLevel ||
+                    previousSettings?.feedMode != settings.feedMode
 
                 val shouldRefreshSaved = previousSettings == null ||
                     previousSettings?.language != settings.language ||
                     previousSettings?.readSort != settings.readSort
 
-                _uiState.update { it.copy(settings = settings) }
+                _uiState.update {
+                    it.copy(
+                        settings = settings,
+                        packCatalog = buildPackCatalog(settings.customPacksJson),
+                        effectiveFeedMode = effectiveFeedMode(settings.feedMode),
+                    )
+                }
                 previousSettings = settings
 
                 if (shouldRefreshFeed) refreshFeed()
@@ -108,6 +131,16 @@ class MainViewModel(
             }
 
             val settings = _uiState.value.settings
+            if (settings.feedMode == FeedMode.ONLINE && hasInternet()) {
+                runCatching {
+                    val remoteMatches = container.wikipediaApiClient.searchTitles(
+                        language = settings.language,
+                        query = value,
+                        limit = 25,
+                    )
+                    container.repository.cacheOnlineArticles(remoteMatches)
+                }
+            }
             val results = container.repository.searchByTitle(settings.language, value)
             _uiState.update { it.copy(searchResults = results) }
         }
@@ -117,16 +150,75 @@ class MainViewModel(
         viewModelScope.launch {
             val settings = _uiState.value.settings
             _uiState.update { it.copy(loading = true, error = null) }
-            runCatching {
-                container.repository.loadFeed(
-                    language = settings.language,
-                    personalizationLevel = settings.personalizationLevel,
-                )
-            }.onSuccess { feed ->
+            val feed = runCatching {
+                when {
+                    settings.feedMode == FeedMode.ONLINE && hasInternet() -> {
+                        val remote = container.wikipediaApiClient.fetchRandomSummaries(
+                            language = settings.language,
+                            count = 45,
+                        )
+                        if (remote.isNotEmpty()) {
+                            container.repository.cacheOnlineArticles(remote)
+                            val candidates = remote.map { row ->
+                                ArticleCard(
+                                    pageId = row.pageId,
+                                    lang = row.lang,
+                                    title = row.title,
+                                    normalizedTitle = com.feelbachelor.doompedia.domain.normalizeSearch(row.title),
+                                    summary = row.summary,
+                                    wikiUrl = row.wikiUrl,
+                                    topicKey = com.feelbachelor.doompedia.data.importer.TopicClassifier.normalizeTopic(
+                                        rawTopic = "general",
+                                        title = row.title,
+                                        summary = row.summary,
+                                    ),
+                                    qualityScore = 0.55,
+                                    isDisambiguation = false,
+                                    sourceRevId = row.sourceRevId,
+                                    updatedAt = row.updatedAt,
+                                    bookmarked = false,
+                                )
+                            }
+                            container.repository.rankCandidates(
+                                language = settings.language,
+                                personalizationLevel = settings.personalizationLevel,
+                                candidates = candidates,
+                                limit = 50,
+                            )
+                        } else {
+                            container.repository.loadFeed(
+                                language = settings.language,
+                                personalizationLevel = settings.personalizationLevel,
+                            )
+                        }
+                    }
+
+                    settings.feedMode == FeedMode.ONLINE && !hasInternet() -> {
+                        container.repository.loadFeed(
+                            language = settings.language,
+                            personalizationLevel = settings.personalizationLevel,
+                        )
+                    }
+
+                    else -> {
+                        container.repository.loadFeed(
+                            language = settings.language,
+                            personalizationLevel = settings.personalizationLevel,
+                        )
+                    }
+                }
+            }
+
+            if (settings.feedMode == FeedMode.ONLINE && !hasInternet()) {
+                _events.emit(UiEvent.Snackbar("No internet connection. Showing offline feed."))
+            }
+
+            feed.onSuccess { ranked ->
                 _uiState.update {
                     it.copy(
-                        feed = feed,
+                        feed = ranked,
                         loading = false,
+                        effectiveFeedMode = effectiveFeedMode(settings.feedMode),
                     )
                 }
             }.onFailure { error ->
@@ -306,6 +398,15 @@ class MainViewModel(
         }
     }
 
+    fun setFeedMode(mode: FeedMode) {
+        viewModelScope.launch {
+            container.preferences.setFeedMode(mode)
+            if (mode == FeedMode.ONLINE && !hasInternet()) {
+                _events.emit(UiEvent.Snackbar("No internet connection. Offline mode will be used automatically."))
+            }
+        }
+    }
+
     fun setTheme(mode: ThemeMode) {
         viewModelScope.launch {
             container.preferences.setTheme(mode)
@@ -361,7 +462,44 @@ class MainViewModel(
         if (!pack.available || pack.manifestUrl.isBlank()) return
         viewModelScope.launch {
             container.preferences.setManifestUrl(pack.manifestUrl)
-            _events.emit(UiEvent.Snackbar("${pack.title} selected"))
+            _events.emit(UiEvent.Snackbar("${pack.title} selected (${pack.articleCount} articles)"))
+        }
+    }
+
+    fun addPackByManifestUrl(rawUrl: String) {
+        viewModelScope.launch {
+            val url = rawUrl.trim()
+            if (url.isBlank()) {
+                _events.emit(UiEvent.Snackbar("Enter a manifest URL"))
+                return@launch
+            }
+
+            runCatching {
+                val payload = withContext(Dispatchers.IO) {
+                    URL(url).openStream().bufferedReader().use { it.readText() }
+                }
+                val manifest = manifestJson.decodeFromString(PackManifest.serializer(), payload)
+                val merged = upsertCustomPack(_uiState.value.settings.customPacksJson, manifest, url)
+                container.preferences.setCustomPacksJson(merged)
+            }.onSuccess {
+                _events.emit(UiEvent.Snackbar("Pack added"))
+            }.onFailure { error ->
+                _events.emit(UiEvent.Snackbar(error.message ?: "Could not add pack from manifest"))
+            }
+        }
+    }
+
+    fun removePack(pack: PackOption) {
+        if (!pack.removable) return
+        viewModelScope.launch {
+            runCatching {
+                val updated = removeCustomPack(_uiState.value.settings.customPacksJson, pack.id)
+                container.preferences.setCustomPacksJson(updated)
+            }.onSuccess {
+                _events.emit(UiEvent.Snackbar("${pack.title} removed"))
+            }.onFailure { error ->
+                _events.emit(UiEvent.Snackbar(error.message ?: "Could not remove pack"))
+            }
         }
     }
 
@@ -488,6 +626,17 @@ class MainViewModel(
             refreshSavedData()
         }
     }
+
+    private fun hasInternet(): Boolean {
+        val manager = container.appContext.getSystemService(ConnectivityManager::class.java) ?: return false
+        val network = manager.activeNetwork ?: return false
+        val capabilities = manager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    private fun effectiveFeedMode(requested: FeedMode): FeedMode {
+        return if (requested == FeedMode.ONLINE && !hasInternet()) FeedMode.OFFLINE else requested
+    }
 }
 
 class MainViewModelFactory(
@@ -502,16 +651,19 @@ class MainViewModelFactory(
     }
 }
 
-private fun defaultPackCatalog(): List<PackOption> {
-    return listOf(
+private fun defaultPackCatalog(customPacksJson: String = "[]"): List<PackOption> {
+    val defaults = listOf(
         PackOption(
             id = "en-core-1m",
             title = "English Core 1M",
-            subtitle = "General encyclopedia pack with one million summaries",
-            downloadSize = "~380 MB (gzip)",
+            subtitle = "General encyclopedia pack. Includes science, geography, history, culture, and biographies.",
+            downloadSize = "~380 MB (gzip) / ~396 MB raw",
             installSize = "~1.3 GB",
             manifestUrl = "https://packs.example.invalid/packs/en-core-1m/v1/manifest.json",
             available = true,
+            articleCount = 1_000_000,
+            shardCount = 25,
+            includedTopics = listOf("General", "Science", "History", "Geography", "Culture", "Biography"),
         ),
         PackOption(
             id = "en-science-250k",
@@ -521,6 +673,9 @@ private fun defaultPackCatalog(): List<PackOption> {
             installSize = "~320 MB",
             manifestUrl = "",
             available = false,
+            articleCount = 250_000,
+            shardCount = 7,
+            includedTopics = listOf("Science", "Technology", "Mathematics"),
         ),
         PackOption(
             id = "en-history-250k",
@@ -530,6 +685,117 @@ private fun defaultPackCatalog(): List<PackOption> {
             installSize = "~300 MB",
             manifestUrl = "",
             available = false,
+            articleCount = 250_000,
+            shardCount = 7,
+            includedTopics = listOf("History", "Biography", "Politics"),
         ),
     )
+    return defaults + parseCustomPacks(customPacksJson)
+}
+
+private fun buildPackCatalog(customPacksJson: String): List<PackOption> {
+    return defaultPackCatalog(customPacksJson)
+}
+
+private fun parseCustomPacks(payload: String): List<PackOption> {
+    return runCatching {
+        val json = JSONArray(payload)
+        buildList {
+            for (index in 0 until json.length()) {
+                val item = json.optJSONObject(index) ?: continue
+                val id = item.optString("id").trim()
+                val title = item.optString("title").trim()
+                val subtitle = item.optString("subtitle").trim()
+                val manifestUrl = item.optString("manifestUrl").trim()
+                if (id.isBlank() || title.isBlank() || manifestUrl.isBlank()) continue
+
+                val includedTopics = mutableListOf<String>()
+                val topics = item.optJSONArray("includedTopics") ?: JSONArray()
+                for (topicIndex in 0 until topics.length()) {
+                    val topic = topics.optString(topicIndex).trim()
+                    if (topic.isNotBlank()) includedTopics += topic
+                }
+
+                add(
+                    PackOption(
+                        id = id,
+                        title = title,
+                        subtitle = subtitle.ifBlank { "Custom pack" },
+                        downloadSize = item.optString("downloadSize").ifBlank { "Unknown" },
+                        installSize = item.optString("installSize").ifBlank { "Unknown" },
+                        manifestUrl = manifestUrl,
+                        available = true,
+                        articleCount = item.optInt("articleCount", 0).coerceAtLeast(0),
+                        shardCount = item.optInt("shardCount", 0).coerceAtLeast(0),
+                        includedTopics = includedTopics,
+                        removable = true,
+                    )
+                )
+            }
+        }
+    }.getOrDefault(emptyList())
+}
+
+private fun upsertCustomPack(existingJson: String, manifest: PackManifest, manifestUrl: String): String {
+    val current = JSONArray(existingJson)
+    val next = JSONArray()
+    val topicList = if (manifest.packTags.isNotEmpty()) {
+        manifest.packTags.take(8).map(::prettyTopicLabel)
+    } else {
+        manifest.topicDistribution.keys
+            .sortedByDescending { manifest.topicDistribution[it] ?: 0 }
+            .take(8)
+            .map(::prettyTopicLabel)
+    }
+    val downloadBytes = manifest.shards.sumOf { it.bytes }
+    val generated = JSONObject()
+        .put("id", manifest.packId)
+        .put("title", manifest.packId.replace('-', ' ').replaceFirstChar { it.titlecase() })
+        .put("subtitle", manifest.description?.takeIf { it.isNotBlank() } ?: "Pack imported from manifest")
+        .put("manifestUrl", manifestUrl)
+        .put("downloadSize", formatBytes(downloadBytes))
+        .put("installSize", "Varies by device")
+        .put("articleCount", manifest.recordCount)
+        .put("shardCount", manifest.shards.size)
+        .put("includedTopics", JSONArray(topicList))
+
+    for (index in 0 until current.length()) {
+        val item = current.optJSONObject(index) ?: continue
+        if (item.optString("id") == manifest.packId) continue
+        next.put(item)
+    }
+    next.put(generated)
+    return next.toString()
+}
+
+private fun removeCustomPack(existingJson: String, packId: String): String {
+    val current = JSONArray(existingJson)
+    val next = JSONArray()
+    for (index in 0 until current.length()) {
+        val item = current.optJSONObject(index) ?: continue
+        if (item.optString("id") == packId) continue
+        next.put(item)
+    }
+    return next.toString()
+}
+
+private fun formatBytes(bytes: Long): String {
+    if (bytes <= 0L) return "Unknown"
+    val mb = bytes.toDouble() / (1024.0 * 1024.0)
+    return if (mb >= 1024.0) {
+        String.format("%.2f GB", mb / 1024.0)
+    } else {
+        String.format("%.0f MB", mb)
+    }
+}
+
+private fun prettyTopicLabel(raw: String): String {
+    return raw
+        .replace('-', ' ')
+        .replace('_', ' ')
+        .trim()
+        .split(' ')
+        .filter { it.isNotBlank() }
+        .joinToString(" ") { token -> token.lowercase().replaceFirstChar { it.titlecase() } }
+        .ifBlank { "General" }
 }

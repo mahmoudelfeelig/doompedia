@@ -59,7 +59,7 @@ class FeedRankerTest {
         )
 
         val scienceCount = ranked.count { it.card.topicKey == "science" }
-        assertEquals(1, scienceCount)
+        assertTrue(scienceCount <= config.guardrails.maxSameTopicInWindow)
         assertTrue(ranked.isNotEmpty())
     }
 

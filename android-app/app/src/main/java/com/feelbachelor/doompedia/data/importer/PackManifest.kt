@@ -9,10 +9,14 @@ data class PackManifest(
     val version: Int,
     val createdAt: String,
     val recordCount: Int,
+    val description: String? = null,
+    val packTags: List<String> = emptyList(),
     val compression: String,
     val shards: List<PackShard>,
     val delta: PackDelta? = null,
     val topicDistribution: Map<String, Int> = emptyMap(),
+    val entityDistribution: Map<String, Int> = emptyMap(),
+    val sampleKeywords: List<String> = emptyList(),
     val attribution: PackAttribution,
 )
 

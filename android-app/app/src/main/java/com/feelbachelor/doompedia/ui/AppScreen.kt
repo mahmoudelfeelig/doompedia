@@ -21,12 +21,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.feelbachelor.doompedia.domain.ArticleCard
+import com.feelbachelor.doompedia.domain.FeedMode
 import com.feelbachelor.doompedia.domain.PersonalizationLevel
 import com.feelbachelor.doompedia.domain.ReadSort
 import com.feelbachelor.doompedia.domain.ThemeMode
 
 private enum class Tab(val title: String, val icon: ImageVector) {
-    FEED("Feed", Icons.Outlined.Article),
+    FEED("Explore", Icons.Outlined.Article),
     SAVED("Saved", Icons.Outlined.Bookmark),
     PACKS("Packs", Icons.Outlined.CloudDownload),
     SETTINGS("Settings", Icons.Outlined.Settings),
@@ -55,6 +56,9 @@ fun AppScreen(
     onExportAllFolders: () -> Unit,
     onImportFolders: (String) -> Unit,
     onChoosePack: (PackOption) -> Unit,
+    onAddPackByManifestUrl: (String) -> Unit,
+    onRemovePack: (PackOption) -> Unit,
+    onSetFeedMode: (FeedMode) -> Unit,
     onSetPersonalization: (PersonalizationLevel) -> Unit,
     onSetThemeMode: (ThemeMode) -> Unit,
     onSetAccentHex: (String) -> Unit,
@@ -78,7 +82,12 @@ fun AppScreen(
                 Tab.entries.forEachIndexed { index, tab ->
                     NavigationBarItem(
                         selected = selectedTab == index,
-                        onClick = { selectedTab = index },
+                        onClick = {
+                            if (selectedTab == index && tab == Tab.FEED) {
+                                onRefresh()
+                            }
+                            selectedTab = index
+                        },
                         label = { Text(tab.title) },
                         icon = {
                             Icon(
@@ -129,6 +138,8 @@ fun AppScreen(
                 updateInProgress = state.updateInProgress,
                 packs = state.packCatalog,
                 onChoosePack = onChoosePack,
+                onAddPackByManifestUrl = onAddPackByManifestUrl,
+                onRemovePack = onRemovePack,
                 onSetManifestUrl = onSetManifestUrl,
                 onCheckUpdatesNow = onCheckUpdatesNow,
             )
@@ -136,6 +147,8 @@ fun AppScreen(
             Tab.SETTINGS -> SettingsScreen(
                 paddingValues = padding,
                 settings = state.settings,
+                effectiveFeedMode = state.effectiveFeedMode,
+                onSetFeedMode = onSetFeedMode,
                 onSetPersonalization = onSetPersonalization,
                 onSetThemeMode = onSetThemeMode,
                 onSetAccentHex = onSetAccentHex,

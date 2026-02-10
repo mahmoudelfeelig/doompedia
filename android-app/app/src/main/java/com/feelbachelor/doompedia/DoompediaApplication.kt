@@ -6,6 +6,7 @@ import com.feelbachelor.doompedia.data.importer.AssetBootstrapper
 import com.feelbachelor.doompedia.data.importer.DeltaApplier
 import com.feelbachelor.doompedia.data.importer.PackInstaller
 import com.feelbachelor.doompedia.data.importer.ShardDownloader
+import com.feelbachelor.doompedia.data.net.WikipediaApiClient
 import com.feelbachelor.doompedia.data.repo.UserPreferencesStore
 import com.feelbachelor.doompedia.data.repo.WikiRepository
 import com.feelbachelor.doompedia.data.update.PackUpdateService
@@ -26,6 +27,7 @@ class DoompediaApplication : Application() {
 }
 
 class AppContainer(application: Application) {
+    val appContext: Application = application
     private val db = WikiDatabase.getInstance(application)
     private val rankingConfig = RankingConfigLoader(application).load()
     private val ranker = FeedRanker(rankingConfig)
@@ -45,5 +47,6 @@ class AppContainer(application: Application) {
         rankingConfig = rankingConfig,
         ranker = ranker,
     )
+    val wikipediaApiClient = WikipediaApiClient()
     val bootstrapper = AssetBootstrapper(application, db)
 }

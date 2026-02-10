@@ -9,6 +9,8 @@ import com.feelbachelor.doompedia.data.db.SaveFolderSummaryRow
 import com.feelbachelor.doompedia.data.db.TopicAffinityEntity
 import com.feelbachelor.doompedia.data.db.WikiDao
 import com.feelbachelor.doompedia.data.importer.TopicClassifier
+import com.feelbachelor.doompedia.data.db.ArticleEntity
+import com.feelbachelor.doompedia.data.net.OnlineArticle
 import com.feelbachelor.doompedia.domain.ArticleCard
 import com.feelbachelor.doompedia.domain.PersonalizationLevel
 import com.feelbachelor.doompedia.domain.ReadSort
@@ -55,6 +57,23 @@ class WikiRepository(
         )
     }
 
+    suspend fun rankCandidates(
+        language: String,
+        personalizationLevel: PersonalizationLevel,
+        candidates: List<ArticleCard>,
+        limit: Int = 50,
+    ): List<RankedCard> {
+        val affinity = dao.topicAffinities(language).associate { it.topicKey to it.score }
+        val recentTopics = dao.recentTopics(rankingConfig.guardrails.windowSize)
+        return ranker.rank(
+            candidates = candidates,
+            topicAffinity = affinity,
+            recentlySeenTopics = recentTopics,
+            level = personalizationLevel,
+            limit = limit,
+        )
+    }
+
     suspend fun searchByTitle(
         language: String,
         query: String,
@@ -90,6 +109,30 @@ class WikiRepository(
         }
 
         return combined.values.take(maxResults)
+    }
+
+    suspend fun cacheOnlineArticles(articles: List<OnlineArticle>) {
+        if (articles.isEmpty()) return
+        val rows = articles.map { article ->
+            ArticleEntity(
+                pageId = article.pageId,
+                lang = article.lang,
+                title = article.title,
+                normalizedTitle = normalizeSearch(article.title),
+                summary = article.summary,
+                wikiUrl = article.wikiUrl,
+                topicKey = TopicClassifier.normalizeTopic(
+                    rawTopic = "general",
+                    title = article.title,
+                    summary = article.summary,
+                ),
+                qualityScore = 0.55,
+                isDisambiguation = false,
+                sourceRevId = article.sourceRevId,
+                updatedAt = article.updatedAt,
+            )
+        }
+        dao.upsertArticles(rows)
     }
 
     suspend fun recordOpen(card: ArticleCard, personalizationLevel: PersonalizationLevel) {
