@@ -1,63 +1,68 @@
 package com.feelbachelor.doompedia.ui
 
+import android.graphics.Color as AndroidColor
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import com.feelbachelor.doompedia.data.repo.UserSettings
 import com.feelbachelor.doompedia.domain.PersonalizationLevel
 import com.feelbachelor.doompedia.domain.ThemeMode
 import com.feelbachelor.doompedia.ui.theme.parseHexColor
+import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(
     paddingValues: PaddingValues,
     settings: UserSettings,
-    updateInProgress: Boolean,
     onSetPersonalization: (PersonalizationLevel) -> Unit,
     onSetThemeMode: (ThemeMode) -> Unit,
     onSetAccentHex: (String) -> Unit,
+    onSetFontScale: (Float) -> Unit,
+    onSetHighContrast: (Boolean) -> Unit,
+    onSetReduceMotion: (Boolean) -> Unit,
     onSetWifiOnly: (Boolean) -> Unit,
-    onSetManifestUrl: (String) -> Unit,
-    onCheckUpdatesNow: () -> Unit,
     onExportSettings: () -> Unit,
     onImportSettings: (String) -> Unit,
     onOpenExternalUrl: (String) -> Unit,
 ) {
-    var manifestUrlDraft by remember(settings.manifestUrl) { mutableStateOf(settings.manifestUrl) }
     var accentHexDraft by remember(settings.accentHex) { mutableStateOf(settings.accentHex) }
     var importDraft by remember { mutableStateOf("") }
-    LaunchedEffect(settings.manifestUrl) {
-        if (settings.manifestUrl != manifestUrlDraft) {
-            manifestUrlDraft = settings.manifestUrl
-        }
-    }
+    var hue by remember { mutableFloatStateOf(0f) }
+    var saturation by remember { mutableFloatStateOf(0f) }
+    var value by remember { mutableFloatStateOf(0f) }
+
     LaunchedEffect(settings.accentHex) {
-        if (settings.accentHex != accentHexDraft) {
-            accentHexDraft = settings.accentHex
-        }
+        val color = parseHexColor(settings.accentHex, MaterialTheme.colorScheme.primary)
+        val hsv = FloatArray(3)
+        AndroidColor.colorToHSV(color.toArgb(), hsv)
+        hue = hsv[0]
+        saturation = hsv[1]
+        value = hsv[2]
+        accentHexDraft = settings.accentHex
     }
 
     val presets = listOf(
@@ -66,25 +71,44 @@ fun SettingsScreen(
         "#C44536",
         "#F59E0B",
         "#7E22CE",
-        "#1F2937",
+        "#EC4899",
     )
 
-    Column(
+    fun updateGeneratedColor(newHue: Float = hue, newSaturation: Float = saturation, newValue: Float = value) {
+        val generatedHex = hsvToColor(newHue, newSaturation, newValue).toHexColor()
+        accentHexDraft = generatedHex
+        onSetAccentHex(generatedHex)
+    }
+
+    LazyColumn(
         modifier = Modifier
             .padding(paddingValues)
             .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(bottom = 120.dp),
     ) {
-        SettingsCard(
-            title = "Personalization",
-            subtitle = "Choose how strongly your reading behavior influences ranking",
-        ) {
+        item {
+            Text(
+                text = "Settings",
+                style = MaterialTheme.typography.headlineSmall,
+            )
+        }
+
+        item {
+            Text(
+                text = "Personalization",
+                style = MaterialTheme.typography.titleMedium,
+            )
+        }
+        item {
             EnumOptions(
                 selected = settings.personalizationLevel,
                 values = PersonalizationLevel.entries,
                 label = { it.name },
                 onSelect = onSetPersonalization,
             )
+        }
+        item {
             Text(
                 text = when (settings.personalizationLevel) {
                     PersonalizationLevel.OFF -> "OFF: No behavior-based tuning. Feed stays mostly neutral."
@@ -96,24 +120,35 @@ fun SettingsScreen(
             )
         }
 
-        SettingsCard(
-            title = "Appearance",
-            subtitle = "Theme mode and custom accent color",
-        ) {
+        item { HorizontalDivider() }
+
+        item {
+            Text(text = "Appearance", style = MaterialTheme.typography.titleMedium)
+        }
+        item {
             EnumOptions(
                 selected = settings.themeMode,
                 values = ThemeMode.entries,
                 label = { it.name },
                 onSelect = onSetThemeMode,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        }
+        item {
+            Text(
+                text = "Color presets",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        item {
+            androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 presets.forEach { hex ->
                     Box(
                         modifier = Modifier
-                            .size(26.dp)
+                            .size(30.dp)
                             .background(
                                 color = parseHexColor(hex, MaterialTheme.colorScheme.primary),
-                                shape = CircleShape,
+                                shape = androidx.compose.foundation.shape.CircleShape,
                             )
                             .clickable {
                                 accentHexDraft = hex
@@ -122,6 +157,56 @@ fun SettingsScreen(
                     )
                 }
             }
+        }
+
+        item {
+            Text(
+                text = "Color generator",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        item {
+            val generated = hsvToColor(hue, saturation, value)
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(color = generated, shape = androidx.compose.foundation.shape.CircleShape),
+            )
+        }
+
+        item {
+            Text("Hue: ${hue.roundToInt()}", style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = hue,
+                onValueChange = {
+                    hue = it
+                    updateGeneratedColor(newHue = it)
+                },
+                valueRange = 0f..360f,
+            )
+            Text("Saturation: ${(saturation * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = saturation,
+                onValueChange = {
+                    saturation = it
+                    updateGeneratedColor(newSaturation = it)
+                },
+                valueRange = 0f..1f,
+            )
+            Text("Brightness: ${(value * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = value,
+                onValueChange = {
+                    value = it
+                    updateGeneratedColor(newValue = it)
+                },
+                valueRange = 0f..1f,
+            )
+        }
+
+        item {
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),
                 value = accentHexDraft,
@@ -135,76 +220,69 @@ fun SettingsScreen(
             )
         }
 
-        SettingsCard(
-            title = "Data and updates",
-            subtitle = "Manual update checks only",
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    text = "Wi-Fi only",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Switch(
-                    checked = settings.wifiOnlyDownloads,
-                    onCheckedChange = onSetWifiOnly,
-                )
-            }
-            OutlinedTextField(
-                modifier = Modifier.fillMaxWidth(),
-                value = manifestUrlDraft,
-                onValueChange = {
-                    manifestUrlDraft = it
-                    onSetManifestUrl(it)
-                },
-                label = { Text("Manifest URL") },
-                placeholder = { Text("https://packs.example.com/packs/en-core-1m/v1/manifest.json") },
-                singleLine = true,
-            )
-            Button(
-                onClick = onCheckUpdatesNow,
-                enabled = !updateInProgress,
-            ) {
-                Text(if (updateInProgress) "Checking..." else "Check updates now")
-            }
-            Text(
-                text = "Installed pack version: ${settings.installedPackVersion}",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            if (settings.lastUpdateIso.isNotBlank()) {
-                Text(
-                    text = "Last check: ${settings.lastUpdateIso}",
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-            if (settings.lastUpdateStatus.isNotBlank()) {
-                Text(
-                    text = settings.lastUpdateStatus,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
+        item { HorizontalDivider() }
+
+        item {
+            Text(text = "Accessibility", style = MaterialTheme.typography.titleMedium)
         }
 
-        SettingsCard(
-            title = "Settings backup",
-            subtitle = "Export or import settings JSON",
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = onExportSettings) {
-                    Text("Export (copy)")
-                }
+        item {
+            Text(
+                text = "Font size (${(settings.fontScale * 100).roundToInt()}%)",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Slider(
+                value = settings.fontScale,
+                onValueChange = onSetFontScale,
+                valueRange = 0.85f..1.35f,
+            )
+        }
+
+        item {
+            SettingSwitchRow(
+                label = "High contrast mode",
+                checked = settings.highContrast,
+                onCheckedChange = onSetHighContrast,
+            )
+        }
+
+        item {
+            SettingSwitchRow(
+                label = "Reduce motion",
+                checked = settings.reduceMotion,
+                onCheckedChange = onSetReduceMotion,
+            )
+        }
+
+        item {
+            SettingSwitchRow(
+                label = "Wi-Fi only downloads",
+                checked = settings.wifiOnlyDownloads,
+                onCheckedChange = onSetWifiOnly,
+            )
+        }
+
+        item { HorizontalDivider() }
+
+        item {
+            Text(text = "Settings backup", style = MaterialTheme.typography.titleMedium)
+        }
+        item {
+            TextButton(onClick = onExportSettings) {
+                Text("Export settings (copy)")
             }
+        }
+        item {
             OutlinedTextField(
                 modifier = Modifier.fillMaxWidth(),
                 value = importDraft,
                 onValueChange = { importDraft = it },
-                label = { Text("Import JSON") },
+                label = { Text("Import settings JSON") },
                 placeholder = { Text("{\"themeMode\":\"DARK\", ...}") },
             )
-            Button(
+        }
+        item {
+            TextButton(
                 onClick = { onImportSettings(importDraft) },
                 enabled = importDraft.isNotBlank(),
             ) {
@@ -212,10 +290,10 @@ fun SettingsScreen(
             }
         }
 
-        SettingsCard(
-            title = "Attribution",
-            subtitle = "Wikipedia content and licensing",
-        ) {
+        item { HorizontalDivider() }
+
+        item {
+            Text(text = "Attribution", style = MaterialTheme.typography.titleMedium)
             Text(
                 text = "This app uses Wikipedia content and summaries under CC BY-SA 4.0.",
                 style = MaterialTheme.typography.bodySmall,
@@ -231,22 +309,24 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun SettingsCard(
-    title: String,
-    subtitle: String,
-    content: @Composable () -> Unit,
+private fun SettingSwitchRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
 ) {
-    Card {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(text = title, style = MaterialTheme.typography.titleMedium)
-            Text(text = subtitle, style = MaterialTheme.typography.bodySmall)
-            content()
-        }
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+        )
     }
 }
 
@@ -257,7 +337,7 @@ private fun <T : Enum<T>> EnumOptions(
     label: (T) -> String,
     onSelect: (T) -> Unit,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         values.forEach { value ->
             TextButton(onClick = { onSelect(value) }) {
                 val marker = if (value == selected) "• " else ""
@@ -265,4 +345,19 @@ private fun <T : Enum<T>> EnumOptions(
             }
         }
     }
+}
+
+private fun hsvToColor(hue: Float, saturation: Float, value: Float): Color {
+    val hsv = floatArrayOf(hue, saturation, value)
+    return Color(AndroidColor.HSVToColor(hsv))
+}
+
+private fun Color.toHexColor(): String {
+    val argb = toArgb()
+    return String.format(
+        "#%02X%02X%02X",
+        AndroidColor.red(argb),
+        AndroidColor.green(argb),
+        AndroidColor.blue(argb),
+    )
 }

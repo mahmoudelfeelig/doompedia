@@ -3,17 +3,24 @@ package com.feelbachelor.doompedia.ui
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -22,12 +29,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.feelbachelor.doompedia.data.repo.WikiRepository
 import com.feelbachelor.doompedia.domain.ArticleCard
 import com.feelbachelor.doompedia.domain.RankedCard
-import kotlin.math.ceil
 
 @Composable
 fun FeedScreen(
@@ -61,7 +69,7 @@ fun FeedScreen(
             onValueChange = onQueryChange,
             modifier = Modifier.fillMaxWidth(),
             label = { Text("Search title") },
-            placeholder = { Text("Try: Ada Lovelace") },
+            placeholder = { Text("Try: Alan Turing") },
             singleLine = true,
         )
 
@@ -85,7 +93,8 @@ fun FeedScreen(
         }
 
         LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(bottom = 120.dp),
         ) {
             item {
                 TextButton(onClick = onRefresh) {
@@ -108,18 +117,39 @@ fun FeedScreen(
     state.folderPicker?.let { picker ->
         AlertDialog(
             onDismissRequest = onDismissFolderPicker,
-            title = { Text("Save \"${picker.card.title}\" to folders") },
+            title = {
+                Text(
+                    text = "Save to folders",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (state.folders.isEmpty()) {
-                        Text("No folders yet. Create one in Saved tab.")
-                    } else {
-                        state.folders.forEach { folder ->
+                    Text(
+                        text = picker.card.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        text = "Choose one or more folders",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 280.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        items(
+                            state.folders.filter { it.folderId != WikiRepository.DEFAULT_READ_FOLDER_ID },
+                            key = { it.folderId },
+                        ) { folder ->
                             val checked = folder.folderId in picker.selectedFolderIds
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { onToggleFolderSelection(folder.folderId) },
+                                    .clickable { onToggleFolderSelection(folder.folderId) }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween,
                             ) {
                                 Text(
@@ -138,7 +168,7 @@ fun FeedScreen(
             },
             confirmButton = {
                 TextButton(onClick = onApplyFolderSelection) {
-                    Text("Apply")
+                    Text("Done")
                 }
             },
             dismissButton = {
@@ -150,6 +180,7 @@ fun FeedScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ArticleCardItem(
     item: RankedCard,
@@ -167,38 +198,51 @@ private fun ArticleCardItem(
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    buildTags(card).forEach { tag ->
-                        AssistChip(onClick = {}, label = { Text(tag) })
-                    }
+                Text(
+                    text = card.title,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                IconButton(onClick = { showWhy.value = true }) {
+                    Icon(
+                        imageVector = Icons.Outlined.Info,
+                        contentDescription = "Why this is shown",
+                    )
                 }
-                TextButton(onClick = { showWhy.value = true }) {
-                    Text("i")
+            }
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                buildTopicKeywords(card).forEach { tag ->
+                    AssistChip(
+                        onClick = {},
+                        label = { Text(tag) },
+                    )
                 }
             }
 
             Text(
-                text = card.title,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
                 text = card.summary,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyLarge,
             )
 
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedButton(onClick = { onToggleBookmark(card) }) {
-                    Text(if (card.bookmarked) "Unsave" else "Save")
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(onClick = { onShowFolderPicker(card) }) {
+                    Text(if (card.bookmarked) "Saved" else "Save")
                 }
                 OutlinedButton(onClick = { onMoreLike(card) }) {
                     Text("Show more")
@@ -206,8 +250,10 @@ private fun ArticleCardItem(
                 OutlinedButton(onClick = { onLessLike(card) }) {
                     Text("Show less")
                 }
-                OutlinedButton(onClick = { onShowFolderPicker(card) }) {
-                    Text("Folders")
+                if (card.bookmarked) {
+                    OutlinedButton(onClick = { onToggleBookmark(card) }) {
+                        Text("Unsave")
+                    }
                 }
             }
         }
@@ -219,8 +265,8 @@ private fun ArticleCardItem(
             title = { Text("Why this is shown") },
             text = {
                 Text(
-                    "This recommendation is based on your recent reading behavior, "
-                        + "topic balancing, and exploration rules.\n\n${item.why}",
+                    "This card is selected using your personalization level, "
+                        + "topic diversity guardrails, and controlled exploration.\n\n${item.why}",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             },
@@ -233,25 +279,38 @@ private fun ArticleCardItem(
     }
 }
 
-private fun buildTags(card: ArticleCard): List<String> {
-    val words = card.summary.split("\\s+".toRegex()).filter { it.isNotBlank() }
-    val readMinutes = ceil(words.size / 220.0).toInt().coerceAtLeast(1)
-    val updatedYear = card.updatedAt.take(4).takeIf { it.all(Char::isDigit) }
-    val qualityTag = when {
-        card.qualityScore >= 0.85 -> "High quality"
-        card.qualityScore >= 0.65 -> "Solid quality"
-        else -> "Fresh pick"
-    }
-    val tags = mutableListOf<String>()
+private fun buildTopicKeywords(card: ArticleCard): List<String> {
+    val text = "${card.title} ${card.summary}".lowercase()
+    val tags = linkedSetOf<String>()
     tags += prettyTopic(card.topicKey)
-    tags += card.lang.uppercase()
-    tags += "${readMinutes}m read"
-    tags += qualityTag
-    updatedYear?.let { tags += it }
-    if (card.bookmarked) tags += "Bookmarked"
-    if (card.isDisambiguation) tags += "Disambiguation"
-    return tags.take(6)
+
+    keywordBuckets.forEach { (topic, keywords) ->
+        if (keywords.any { keyword -> text.contains(keyword) }) {
+            tags += prettyTopic(topic)
+        }
+    }
+
+    if (card.title.contains("list of", ignoreCase = true)) tags += "Lists"
+    if (card.title.contains("university", ignoreCase = true)) tags += "Education"
+    if (card.title.contains("city", ignoreCase = true)) tags += "Places"
+    if (card.title.contains("war", ignoreCase = true)) tags += "Conflict"
+    if (card.bookmarked) tags += "Saved"
+
+    return tags.take(6).toList()
 }
+
+private val keywordBuckets: List<Pair<String, List<String>>> = listOf(
+    "biography" to listOf("born", "died", "biography", "person", "scientist", "author", "actor"),
+    "science" to listOf("physics", "chemistry", "biology", "mathematics", "scientist", "theory"),
+    "technology" to listOf("computer", "software", "algorithm", "internet", "digital", "engineering"),
+    "history" to listOf("war", "empire", "century", "historical", "revolution", "dynasty"),
+    "politics" to listOf("government", "election", "parliament", "policy", "minister", "president"),
+    "culture" to listOf("music", "film", "art", "literature", "religion", "language"),
+    "geography" to listOf("city", "country", "river", "mountain", "region", "capital"),
+    "economics" to listOf("economy", "finance", "trade", "market", "industry", "currency"),
+    "sports" to listOf("football", "basketball", "olympic", "athlete", "league", "championship"),
+    "health" to listOf("medicine", "disease", "medical", "hospital", "health", "symptom"),
+)
 
 private fun prettyTopic(raw: String): String {
     return raw

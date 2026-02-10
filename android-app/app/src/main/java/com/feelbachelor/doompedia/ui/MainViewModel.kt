@@ -9,6 +9,7 @@ import com.feelbachelor.doompedia.data.repo.WikiRepository
 import com.feelbachelor.doompedia.domain.ArticleCard
 import com.feelbachelor.doompedia.domain.PersonalizationLevel
 import com.feelbachelor.doompedia.domain.RankedCard
+import com.feelbachelor.doompedia.domain.ReadSort
 import com.feelbachelor.doompedia.domain.SaveFolderSummary
 import com.feelbachelor.doompedia.domain.ThemeMode
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -20,6 +21,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+data class PackOption(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val downloadSize: String,
+    val installSize: String,
+    val manifestUrl: String,
+    val available: Boolean = true,
+)
 
 data class FolderPickerState(
     val card: ArticleCard,
@@ -37,6 +48,7 @@ data class MainUiState(
     val selectedFolderId: Long = WikiRepository.DEFAULT_BOOKMARKS_FOLDER_ID,
     val savedCards: List<ArticleCard> = emptyList(),
     val folderPicker: FolderPickerState? = null,
+    val packCatalog: List<PackOption> = defaultPackCatalog(),
     val error: String? = null,
 )
 
@@ -70,14 +82,19 @@ class MainViewModel(
         viewModelScope.launch {
             var previousSettings: UserSettings? = null
             container.preferences.settings.collectLatest { settings ->
-                val shouldRefresh = previousSettings == null ||
+                val shouldRefreshFeed = previousSettings == null ||
                     previousSettings?.language != settings.language ||
                     previousSettings?.personalizationLevel != settings.personalizationLevel
+
+                val shouldRefreshSaved = previousSettings == null ||
+                    previousSettings?.language != settings.language ||
+                    previousSettings?.readSort != settings.readSort
+
                 _uiState.update { it.copy(settings = settings) }
                 previousSettings = settings
-                if (shouldRefresh) {
-                    refreshFeed()
-                }
+
+                if (shouldRefreshFeed) refreshFeed()
+                if (shouldRefreshSaved) refreshSavedData()
             }
         }
     }
@@ -121,14 +138,19 @@ class MainViewModel(
     fun refreshSavedData() {
         viewModelScope.launch {
             runCatching {
-                val folders = container.repository.saveFolders()
+                val settings = _uiState.value.settings
+                val folders = container.repository.saveFolders(settings.language)
                 val selected = if (folders.any { it.folderId == _uiState.value.selectedFolderId }) {
                     _uiState.value.selectedFolderId
                 } else {
                     folders.firstOrNull()?.folderId ?: WikiRepository.DEFAULT_BOOKMARKS_FOLDER_ID
                 }
                 val cards = if (folders.isNotEmpty()) {
-                    container.repository.savedCards(selected)
+                    container.repository.savedCards(
+                        folderId = selected,
+                        language = settings.language,
+                        readSort = settings.readSort,
+                    )
                 } else {
                     emptyList()
                 }
@@ -148,7 +170,12 @@ class MainViewModel(
     fun selectSavedFolder(folderId: Long) {
         viewModelScope.launch {
             runCatching {
-                val cards = container.repository.savedCards(folderId)
+                val settings = _uiState.value.settings
+                val cards = container.repository.savedCards(
+                    folderId = folderId,
+                    language = settings.language,
+                    readSort = settings.readSort,
+                )
                 _uiState.update {
                     it.copy(
                         selectedFolderId = folderId,
@@ -189,6 +216,7 @@ class MainViewModel(
         viewModelScope.launch {
             val selected = runCatching {
                 container.repository.selectedFolderIds(card.pageId)
+                    .minus(WikiRepository.DEFAULT_READ_FOLDER_ID)
             }.getOrElse { emptySet() }
             _uiState.update {
                 it.copy(
@@ -202,6 +230,7 @@ class MainViewModel(
     }
 
     fun toggleFolderSelection(folderId: Long) {
+        if (folderId == WikiRepository.DEFAULT_READ_FOLDER_ID) return
         _uiState.update { state ->
             val picker = state.folderPicker ?: return@update state
             val updated = picker.selectedFolderIds.toMutableSet().also { selected ->
@@ -239,6 +268,9 @@ class MainViewModel(
             container.repository.recordOpen(card, _uiState.value.settings.personalizationLevel)
             _events.emit(UiEvent.OpenUrl(card.wikiUrl))
             refreshFeed()
+            if (_uiState.value.selectedFolderId == WikiRepository.DEFAULT_READ_FOLDER_ID) {
+                refreshSavedData()
+            }
         }
     }
 
@@ -268,12 +300,6 @@ class MainViewModel(
         }
     }
 
-    fun openExternalUrl(url: String) {
-        viewModelScope.launch {
-            _events.emit(UiEvent.OpenUrl(url))
-        }
-    }
-
     fun setPersonalization(level: PersonalizationLevel) {
         viewModelScope.launch {
             container.preferences.setPersonalization(level)
@@ -292,6 +318,33 @@ class MainViewModel(
         }
     }
 
+    fun setFontScale(scale: Float) {
+        viewModelScope.launch {
+            container.preferences.setFontScale(scale)
+        }
+    }
+
+    fun setHighContrast(enabled: Boolean) {
+        viewModelScope.launch {
+            container.preferences.setHighContrast(enabled)
+        }
+    }
+
+    fun setReduceMotion(enabled: Boolean) {
+        viewModelScope.launch {
+            container.preferences.setReduceMotion(enabled)
+        }
+    }
+
+    fun setReadSort(sort: ReadSort) {
+        viewModelScope.launch {
+            container.preferences.setReadSort(sort)
+            if (_uiState.value.selectedFolderId == WikiRepository.DEFAULT_READ_FOLDER_ID) {
+                refreshSavedData()
+            }
+        }
+    }
+
     fun setWifiOnly(enabled: Boolean) {
         viewModelScope.launch {
             container.preferences.setWifiOnly(enabled)
@@ -301,6 +354,14 @@ class MainViewModel(
     fun setManifestUrl(url: String) {
         viewModelScope.launch {
             container.preferences.setManifestUrl(url)
+        }
+    }
+
+    fun choosePack(pack: PackOption) {
+        if (!pack.available || pack.manifestUrl.isBlank()) return
+        viewModelScope.launch {
+            container.preferences.setManifestUrl(pack.manifestUrl)
+            _events.emit(UiEvent.Snackbar("${pack.title} selected"))
         }
     }
 
@@ -323,9 +384,70 @@ class MainViewModel(
             result.onSuccess {
                 _events.emit(UiEvent.Snackbar("Settings imported"))
                 refreshFeed()
+                refreshSavedData()
             }.onFailure { error ->
                 _events.emit(UiEvent.Snackbar(error.message ?: "Could not import settings JSON"))
             }
+        }
+    }
+
+    fun exportSelectedFolder() {
+        viewModelScope.launch {
+            val selectedFolderId = _uiState.value.selectedFolderId
+            if (selectedFolderId == WikiRepository.DEFAULT_READ_FOLDER_ID) {
+                _events.emit(UiEvent.Snackbar("Read activity folder cannot be exported"))
+                return@launch
+            }
+
+            runCatching {
+                container.repository.exportFolders(setOf(selectedFolderId))
+            }.onSuccess { payload ->
+                _events.emit(
+                    UiEvent.CopyToClipboard(
+                        text = payload,
+                        message = "Selected folder JSON copied to clipboard",
+                    )
+                )
+            }.onFailure { error ->
+                _events.emit(UiEvent.Snackbar(error.message ?: "Could not export selected folder"))
+            }
+        }
+    }
+
+    fun exportAllFolders() {
+        viewModelScope.launch {
+            runCatching {
+                container.repository.exportFolders()
+            }.onSuccess { payload ->
+                _events.emit(
+                    UiEvent.CopyToClipboard(
+                        text = payload,
+                        message = "All folders JSON copied to clipboard",
+                    )
+                )
+            }.onFailure { error ->
+                _events.emit(UiEvent.Snackbar(error.message ?: "Could not export folders"))
+            }
+        }
+    }
+
+    fun importFolders(payload: String) {
+        viewModelScope.launch {
+            runCatching {
+                container.repository.importFolders(payload)
+            }.onSuccess { linked ->
+                refreshSavedData()
+                refreshFeed()
+                _events.emit(UiEvent.Snackbar("Folder import complete ($linked article links applied)"))
+            }.onFailure { error ->
+                _events.emit(UiEvent.Snackbar(error.message ?: "Could not import folder JSON"))
+            }
+        }
+    }
+
+    fun openExternalUrl(url: String) {
+        viewModelScope.launch {
+            _events.emit(UiEvent.OpenUrl(url))
         }
     }
 
@@ -363,6 +485,7 @@ class MainViewModel(
             _uiState.update { it.copy(updateInProgress = false) }
             _events.emit(UiEvent.Snackbar(outcome.message))
             refreshFeed()
+            refreshSavedData()
         }
     }
 }
@@ -377,4 +500,36 @@ class MainViewModelFactory(
         }
         throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }
+}
+
+private fun defaultPackCatalog(): List<PackOption> {
+    return listOf(
+        PackOption(
+            id = "en-core-1m",
+            title = "English Core 1M",
+            subtitle = "General encyclopedia pack with one million summaries",
+            downloadSize = "~380 MB (gzip)",
+            installSize = "~1.3 GB",
+            manifestUrl = "https://packs.example.invalid/packs/en-core-1m/v1/manifest.json",
+            available = true,
+        ),
+        PackOption(
+            id = "en-science-250k",
+            title = "English Science 250K",
+            subtitle = "Focused pack for science and technology topics",
+            downloadSize = "~95 MB (gzip)",
+            installSize = "~320 MB",
+            manifestUrl = "",
+            available = false,
+        ),
+        PackOption(
+            id = "en-history-250k",
+            title = "English History 250K",
+            subtitle = "Focused pack for history and biography topics",
+            downloadSize = "~90 MB (gzip)",
+            installSize = "~300 MB",
+            manifestUrl = "",
+            available = false,
+        ),
+    )
 }

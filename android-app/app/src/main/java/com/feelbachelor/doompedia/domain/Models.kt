@@ -28,6 +28,11 @@ data class SaveFolderSummary(
     val articleCount: Int,
 )
 
+enum class ReadSort {
+    NEWEST_FIRST,
+    OLDEST_FIRST,
+}
+
 enum class PersonalizationLevel {
     OFF,
     LOW,

@@ -11,12 +11,15 @@ import com.feelbachelor.doompedia.data.db.WikiDao
 import com.feelbachelor.doompedia.data.importer.TopicClassifier
 import com.feelbachelor.doompedia.domain.ArticleCard
 import com.feelbachelor.doompedia.domain.PersonalizationLevel
+import com.feelbachelor.doompedia.domain.ReadSort
 import com.feelbachelor.doompedia.domain.RankedCard
 import com.feelbachelor.doompedia.domain.SaveFolderSummary
 import com.feelbachelor.doompedia.domain.editDistanceAtMostOne
 import com.feelbachelor.doompedia.domain.normalizeSearch
 import com.feelbachelor.doompedia.ranking.FeedRanker
 import com.feelbachelor.doompedia.ranking.RankingConfig
+import org.json.JSONArray
+import org.json.JSONObject
 
 class WikiRepository(
     private val dao: WikiDao,
@@ -25,10 +28,13 @@ class WikiRepository(
 ) {
     companion object {
         const val DEFAULT_BOOKMARKS_FOLDER_ID = 1L
+        const val DEFAULT_READ_FOLDER_ID = 2L
     }
 
     suspend fun ensureDefaults() {
-        dao.ensureDefaultFolder(createdAt = System.currentTimeMillis())
+        val now = System.currentTimeMillis()
+        dao.ensureDefaultFolder(createdAt = now)
+        dao.ensureReadFolder(createdAt = now)
         dao.backfillBookmarksIntoDefaultFolder()
     }
 
@@ -159,9 +165,9 @@ class WikiRepository(
         return true
     }
 
-    suspend fun saveFolders(): List<SaveFolderSummary> {
+    suspend fun saveFolders(language: String): List<SaveFolderSummary> {
         ensureDefaults()
-        return dao.saveFoldersWithCounts().map { it.toDomain() }
+        return dao.saveFoldersWithCounts(language).map { it.toDomain() }
     }
 
     suspend fun createFolder(name: String): Boolean {
@@ -180,13 +186,28 @@ class WikiRepository(
 
     suspend fun deleteFolder(folderId: Long): Boolean {
         ensureDefaults()
-        if (folderId == DEFAULT_BOOKMARKS_FOLDER_ID) return false
+        if (folderId == DEFAULT_BOOKMARKS_FOLDER_ID || folderId == DEFAULT_READ_FOLDER_ID) return false
         return dao.deleteFolder(folderId) > 0
     }
 
-    suspend fun savedCards(folderId: Long, limit: Int = 400): List<ArticleCard> {
+    suspend fun savedCards(
+        folderId: Long,
+        language: String,
+        readSort: ReadSort = ReadSort.NEWEST_FIRST,
+        limit: Int = 400,
+    ): List<ArticleCard> {
         ensureDefaults()
-        return dao.savedCardsInFolder(folderId = folderId, limit = limit).map { it.toDomain() }
+        return when (folderId) {
+            DEFAULT_READ_FOLDER_ID -> {
+                val rows = when (readSort) {
+                    ReadSort.NEWEST_FIRST -> dao.readActivityLatest(lang = language, limit = limit)
+                    ReadSort.OLDEST_FIRST -> dao.readActivityEarliest(lang = language, limit = limit)
+                }
+                rows.map { it.toDomain() }
+            }
+
+            else -> dao.savedCardsInFolder(folderId = folderId, limit = limit).map { it.toDomain() }
+        }
     }
 
     suspend fun selectedFolderIds(pageId: Long): Set<Long> {
@@ -197,10 +218,11 @@ class WikiRepository(
     suspend fun setFoldersForArticle(pageId: Long, folderIds: Set<Long>) {
         ensureDefaults()
         val now = System.currentTimeMillis()
+        val normalizedFolderIds = folderIds - DEFAULT_READ_FOLDER_ID
         dao.clearFolderRefsForArticle(pageId)
-        if (folderIds.isNotEmpty()) {
+        if (normalizedFolderIds.isNotEmpty()) {
             dao.upsertFolderRefs(
-                folderIds.map { folderId ->
+                normalizedFolderIds.map { folderId ->
                     ArticleFolderRefEntity(
                         folderId = folderId,
                         pageId = pageId,
@@ -210,7 +232,7 @@ class WikiRepository(
             )
         }
 
-        if (DEFAULT_BOOKMARKS_FOLDER_ID in folderIds) {
+        if (DEFAULT_BOOKMARKS_FOLDER_ID in normalizedFolderIds) {
             dao.upsertBookmark(
                 BookmarkEntity(
                     pageId = pageId,
@@ -220,6 +242,110 @@ class WikiRepository(
         } else {
             dao.deleteBookmark(pageId)
         }
+    }
+
+    suspend fun exportFolders(selectedFolderIds: Set<Long>? = null): String {
+        ensureDefaults()
+        val folders = dao.allFolders()
+            .filter { it.folderId != DEFAULT_READ_FOLDER_ID }
+            .filter { selectedFolderIds == null || it.folderId in selectedFolderIds }
+
+        val refs = if (folders.isNotEmpty()) {
+            dao.folderRefsForFolders(folders.map { it.folderId })
+                .groupBy { it.folderId }
+        } else {
+            emptyMap()
+        }
+
+        val folderPayload = JSONArray()
+        folders.forEach { folder ->
+            val articleIds = refs[folder.folderId]
+                .orEmpty()
+                .map { it.pageId }
+                .distinct()
+                .sorted()
+            folderPayload.put(
+                JSONObject()
+                    .put("folderId", folder.folderId)
+                    .put("name", folder.name)
+                    .put("isDefault", folder.isDefault)
+                    .put("articlePageIds", JSONArray(articleIds)),
+            )
+        }
+
+        return JSONObject()
+            .put("version", 1)
+            .put("format", "doompedia-folder-export")
+            .put("exportedAt", java.time.Instant.now().toString())
+            .put("folders", folderPayload)
+            .toString(2)
+    }
+
+    suspend fun importFolders(payload: String): Int {
+        ensureDefaults()
+        val root = JSONObject(payload)
+        val folders = root.optJSONArray("folders") ?: JSONArray()
+        var linkedCount = 0
+
+        for (index in 0 until folders.length()) {
+            val folderObj = folders.optJSONObject(index) ?: continue
+            val folderName = folderObj.optString("name").trim()
+            if (folderName.isBlank()) continue
+
+            val targetFolderId = when {
+                folderName.equals("Bookmarks", ignoreCase = true) -> DEFAULT_BOOKMARKS_FOLDER_ID
+                folderName.equals("Read", ignoreCase = true) -> DEFAULT_READ_FOLDER_ID
+                else -> {
+                    dao.folderIdByName(folderName) ?: dao.insertFolder(
+                        SaveFolderEntity(
+                            name = folderName,
+                            isDefault = false,
+                            createdAt = System.currentTimeMillis(),
+                        )
+                    )
+                }
+            }
+
+            if (targetFolderId <= 0L || targetFolderId == DEFAULT_READ_FOLDER_ID) continue
+
+            val idsArray = folderObj.optJSONArray("articlePageIds") ?: JSONArray()
+            val pageIds = buildList {
+                for (itemIdx in 0 until idsArray.length()) {
+                    val pageId = idsArray.optLong(itemIdx, -1L)
+                    if (pageId > 0L) add(pageId)
+                }
+            }.distinct()
+            if (pageIds.isEmpty()) continue
+
+            val existingIds = dao.existingArticleIds(pageIds)
+            if (existingIds.isEmpty()) continue
+
+            val now = System.currentTimeMillis()
+            dao.upsertFolderRefs(
+                existingIds.map { pageId ->
+                    ArticleFolderRefEntity(
+                        folderId = targetFolderId,
+                        pageId = pageId,
+                        createdAt = now,
+                    )
+                }
+            )
+
+            if (targetFolderId == DEFAULT_BOOKMARKS_FOLDER_ID) {
+                existingIds.forEach { pageId ->
+                    dao.upsertBookmark(
+                        BookmarkEntity(
+                            pageId = pageId,
+                            createdAt = now,
+                        )
+                    )
+                }
+            }
+
+            linkedCount += existingIds.size
+        }
+
+        return linkedCount
     }
 
     private suspend fun updateTopicAffinity(language: String, topicKey: String, delta: Double) {

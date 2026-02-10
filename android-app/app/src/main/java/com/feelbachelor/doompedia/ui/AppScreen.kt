@@ -1,6 +1,12 @@
 package com.feelbachelor.doompedia.ui
 
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Article
+import androidx.compose.material.icons.outlined.Bookmark
+import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -13,14 +19,17 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.feelbachelor.doompedia.domain.ArticleCard
 import com.feelbachelor.doompedia.domain.PersonalizationLevel
+import com.feelbachelor.doompedia.domain.ReadSort
 import com.feelbachelor.doompedia.domain.ThemeMode
 
-private enum class Tab(val title: String) {
-    FEED("Feed"),
-    SAVED("Saved"),
-    SETTINGS("Settings"),
+private enum class Tab(val title: String, val icon: ImageVector) {
+    FEED("Feed", Icons.Outlined.Article),
+    SAVED("Saved", Icons.Outlined.Bookmark),
+    PACKS("Packs", Icons.Outlined.CloudDownload),
+    SETTINGS("Settings", Icons.Outlined.Settings),
 }
 
 @Composable
@@ -41,9 +50,17 @@ fun AppScreen(
     onSelectSavedFolder: (Long) -> Unit,
     onCreateFolder: (String) -> Unit,
     onDeleteFolder: (Long) -> Unit,
+    onSetReadSort: (ReadSort) -> Unit,
+    onExportSelectedFolder: () -> Unit,
+    onExportAllFolders: () -> Unit,
+    onImportFolders: (String) -> Unit,
+    onChoosePack: (PackOption) -> Unit,
     onSetPersonalization: (PersonalizationLevel) -> Unit,
     onSetThemeMode: (ThemeMode) -> Unit,
     onSetAccentHex: (String) -> Unit,
+    onSetFontScale: (Float) -> Unit,
+    onSetHighContrast: (Boolean) -> Unit,
+    onSetReduceMotion: (Boolean) -> Unit,
     onSetWifiOnly: (Boolean) -> Unit,
     onSetManifestUrl: (String) -> Unit,
     onCheckUpdatesNow: () -> Unit,
@@ -63,7 +80,12 @@ fun AppScreen(
                         selected = selectedTab == index,
                         onClick = { selectedTab = index },
                         label = { Text(tab.title) },
-                        icon = {},
+                        icon = {
+                            Icon(
+                                imageVector = tab.icon,
+                                contentDescription = tab.title,
+                            )
+                        },
                     )
                 }
             }
@@ -92,21 +114,35 @@ fun AppScreen(
                 onSelectFolder = onSelectSavedFolder,
                 onCreateFolder = onCreateFolder,
                 onDeleteFolder = onDeleteFolder,
+                onSetReadSort = onSetReadSort,
+                onExportSelectedFolder = onExportSelectedFolder,
+                onExportAllFolders = onExportAllFolders,
+                onImportFolders = onImportFolders,
                 onOpenCard = onOpenCard,
                 onToggleBookmark = onToggleBookmark,
                 onShowFolderPicker = onShowFolderPicker,
             )
 
-            Tab.SETTINGS -> SettingsScreen(
+            Tab.PACKS -> PacksScreen(
                 paddingValues = padding,
                 settings = state.settings,
                 updateInProgress = state.updateInProgress,
+                packs = state.packCatalog,
+                onChoosePack = onChoosePack,
+                onSetManifestUrl = onSetManifestUrl,
+                onCheckUpdatesNow = onCheckUpdatesNow,
+            )
+
+            Tab.SETTINGS -> SettingsScreen(
+                paddingValues = padding,
+                settings = state.settings,
                 onSetPersonalization = onSetPersonalization,
                 onSetThemeMode = onSetThemeMode,
                 onSetAccentHex = onSetAccentHex,
+                onSetFontScale = onSetFontScale,
+                onSetHighContrast = onSetHighContrast,
+                onSetReduceMotion = onSetReduceMotion,
                 onSetWifiOnly = onSetWifiOnly,
-                onSetManifestUrl = onSetManifestUrl,
-                onCheckUpdatesNow = onCheckUpdatesNow,
                 onExportSettings = onExportSettings,
                 onImportSettings = onImportSettings,
                 onOpenExternalUrl = onOpenExternalUrl,

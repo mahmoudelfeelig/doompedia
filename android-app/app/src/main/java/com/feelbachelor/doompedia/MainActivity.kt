@@ -44,6 +44,8 @@ class MainActivity : ComponentActivity() {
             DoompediaTheme(
                 forceDark = darkMode,
                 accentHex = state.value.settings.accentHex,
+                fontScale = state.value.settings.fontScale,
+                highContrast = state.value.settings.highContrast,
             ) {
                 AppScreen(
                     state = state.value,
@@ -62,9 +64,17 @@ class MainActivity : ComponentActivity() {
                     onSelectSavedFolder = viewModel::selectSavedFolder,
                     onCreateFolder = viewModel::createFolder,
                     onDeleteFolder = viewModel::deleteFolder,
+                    onSetReadSort = viewModel::setReadSort,
+                    onExportSelectedFolder = viewModel::exportSelectedFolder,
+                    onExportAllFolders = viewModel::exportAllFolders,
+                    onImportFolders = viewModel::importFolders,
+                    onChoosePack = viewModel::choosePack,
                     onSetPersonalization = viewModel::setPersonalization,
                     onSetThemeMode = viewModel::setTheme,
                     onSetAccentHex = viewModel::setAccentHex,
+                    onSetFontScale = viewModel::setFontScale,
+                    onSetHighContrast = viewModel::setHighContrast,
+                    onSetReduceMotion = viewModel::setReduceMotion,
                     onSetWifiOnly = viewModel::setWifiOnly,
                     onSetManifestUrl = viewModel::setManifestUrl,
                     onCheckUpdatesNow = viewModel::checkForUpdatesNow,

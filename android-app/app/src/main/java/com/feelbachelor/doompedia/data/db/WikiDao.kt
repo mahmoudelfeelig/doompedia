@@ -121,6 +121,14 @@ interface WikiDao {
 
     @Query(
         """
+        INSERT OR IGNORE INTO save_folders(folderId, name, isDefault, createdAt)
+        VALUES (2, 'Read', 1, :createdAt)
+        """
+    )
+    suspend fun ensureReadFolder(createdAt: Long)
+
+    @Query(
+        """
         INSERT OR IGNORE INTO article_folder_refs(folderId, pageId, createdAt)
         SELECT 1, b.pageId, b.createdAt
         FROM bookmarks b
@@ -136,11 +144,25 @@ interface WikiDao {
         SELECT f.folderId AS folderId, f.name AS name, f.isDefault AS isDefault, COUNT(r.pageId) AS articleCount
         FROM save_folders f
         LEFT JOIN article_folder_refs r ON r.folderId = f.folderId
+        WHERE f.folderId != 2
         GROUP BY f.folderId
-        ORDER BY f.isDefault DESC, f.name ASC
+        
+        UNION ALL
+
+        SELECT f.folderId AS folderId, f.name AS name, f.isDefault AS isDefault,
+               (
+                 SELECT COUNT(DISTINCT h.pageId)
+                 FROM history h
+                 JOIN articles a2 ON a2.pageId = h.pageId
+                 WHERE a2.lang = :lang
+               ) AS articleCount
+        FROM save_folders f
+        WHERE f.folderId = 2
+
+        ORDER BY isDefault DESC, name ASC
         """
     )
-    suspend fun saveFoldersWithCounts(): List<SaveFolderSummaryRow>
+    suspend fun saveFoldersWithCounts(lang: String): List<SaveFolderSummaryRow>
 
     @Query("DELETE FROM save_folders WHERE folderId = :folderId AND isDefault = 0")
     suspend fun deleteFolder(folderId: Long): Int
@@ -172,8 +194,49 @@ interface WikiDao {
     )
     suspend fun savedCardsInFolder(folderId: Long, limit: Int): List<ArticleWithBookmark>
 
+    @Query(
+        """
+        SELECT a.pageId, a.lang, a.title, a.normalizedTitle, a.summary, a.wikiUrl,
+               a.topicKey, a.qualityScore, a.isDisambiguation, a.sourceRevId, a.updatedAt,
+               CASE WHEN b.pageId IS NULL THEN 0 ELSE 1 END AS bookmarked
+        FROM articles a
+        JOIN (
+          SELECT pageId, MAX(openedAt) AS orderTs
+          FROM history
+          GROUP BY pageId
+        ) h ON h.pageId = a.pageId
+        LEFT JOIN bookmarks b ON b.pageId = a.pageId
+        WHERE a.lang = :lang
+        ORDER BY h.orderTs DESC, a.pageId DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun readActivityLatest(lang: String, limit: Int): List<ArticleWithBookmark>
+
+    @Query(
+        """
+        SELECT a.pageId, a.lang, a.title, a.normalizedTitle, a.summary, a.wikiUrl,
+               a.topicKey, a.qualityScore, a.isDisambiguation, a.sourceRevId, a.updatedAt,
+               CASE WHEN b.pageId IS NULL THEN 0 ELSE 1 END AS bookmarked
+        FROM articles a
+        JOIN (
+          SELECT pageId, MIN(openedAt) AS orderTs
+          FROM history
+          GROUP BY pageId
+        ) h ON h.pageId = a.pageId
+        LEFT JOIN bookmarks b ON b.pageId = a.pageId
+        WHERE a.lang = :lang
+        ORDER BY h.orderTs ASC, a.pageId ASC
+        LIMIT :limit
+        """
+    )
+    suspend fun readActivityEarliest(lang: String, limit: Int): List<ArticleWithBookmark>
+
     @Insert
     suspend fun insertHistory(row: HistoryEntity)
+
+    @Insert
+    suspend fun insertHistory(rows: List<HistoryEntity>)
 
     @Query("SELECT topicKey FROM history ORDER BY openedAt DESC LIMIT :limit")
     suspend fun recentTopics(limit: Int): List<String>
@@ -186,4 +249,19 @@ interface WikiDao {
 
     @Upsert
     suspend fun upsertTopicAffinity(row: TopicAffinityEntity)
+
+    @Query("SELECT * FROM save_folders ORDER BY isDefault DESC, name ASC")
+    suspend fun allFolders(): List<SaveFolderEntity>
+
+    @Query("SELECT * FROM article_folder_refs WHERE folderId IN (:folderIds)")
+    suspend fun folderRefsForFolders(folderIds: List<Long>): List<ArticleFolderRefEntity>
+
+    @Query("SELECT pageId FROM articles WHERE pageId IN (:pageIds)")
+    suspend fun existingArticleIds(pageIds: List<Long>): List<Long>
+
+    @Query("SELECT pageId FROM history GROUP BY pageId ORDER BY MAX(openedAt) DESC")
+    suspend fun readHistoryPageIds(): List<Long>
+
+    @Query("SELECT folderId FROM save_folders WHERE name = :name LIMIT 1")
+    suspend fun folderIdByName(name: String): Long?
 }
