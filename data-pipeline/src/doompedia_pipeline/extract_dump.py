@@ -16,6 +16,7 @@ _HEADING_RE = re.compile(r"^=+.*?=+$", re.MULTILINE)
 _TEMPLATE_RE = re.compile(r"\{\{[^{}]*\}\}")
 _CATEGORY_RE = re.compile(r"\[\[Category:([^|\]]+)", re.IGNORECASE)
 _WIKILINK_RE = re.compile(r"\[\[([^|\]]+)(?:\|([^\]]+))?\]\]")
+_WORD_RE = re.compile(r"[A-Za-z][A-Za-z-]{2,}")
 
 
 def parse_args() -> argparse.Namespace:
@@ -93,6 +94,51 @@ def extract_summary(wikitext: str, min_summary: int, max_summary: int) -> str | 
     if not lead:
         return None
     return clamp_summary(lead, minimum=min_summary, maximum=max_summary)
+
+
+def _infer_entity_type(title: str, summary: str, topic_key: str) -> str:
+    lowered = f"{title} {summary}".lower()
+    if topic_key == "biography" or any(token in lowered for token in (" born ", " died ", " she ", " he ")):
+        return "person"
+    if topic_key == "geography" or any(token in lowered for token in (" city ", " country ", " river ", " mountain ")):
+        return "place"
+    if topic_key == "history" or any(token in lowered for token in (" war ", " battle ", " revolution ")):
+        return "event"
+    if topic_key in {"technology", "science", "health"}:
+        return "concept"
+    return "concept"
+
+
+def _extract_keywords(title: str, summary: str, topic_key: str) -> list[str]:
+    keywords: list[str] = []
+    seen: set[str] = set()
+
+    def add(value: str) -> None:
+        normalized = normalize_title(value).replace(" ", "-")
+        if not normalized or normalized in seen:
+            return
+        seen.add(normalized)
+        keywords.append(normalized)
+
+    add(topic_key)
+
+    title_tokens = [token for token in _WORD_RE.findall(title.lower()) if len(token) >= 4]
+    summary_tokens = [token for token in _WORD_RE.findall(summary.lower()) if len(token) >= 5]
+    stopwords = {
+        "about", "after", "before", "their", "there", "which", "while", "where", "these", "those",
+        "through", "using", "under", "between", "during", "known", "wikipedia", "article",
+    }
+
+    for token in title_tokens[:8]:
+        if token not in stopwords:
+            add(token)
+    for token in summary_tokens[:16]:
+        if token not in stopwords:
+            add(token)
+        if len(keywords) >= 12:
+            break
+
+    return keywords[:12]
 
 
 def _local_name(tag: str) -> str:
@@ -176,6 +222,7 @@ def extract_dump(
             disambiguation = "{{disambiguation" in text.lower() or title.lower().endswith("(disambiguation)")
             article_url = f"https://{language}.wikipedia.org/wiki/{quote(title.replace(' ', '_'))}"
 
+            topic_key = extract_topic_key(title=title, wikitext=text, summary=summary)
             payload = {
                 "page_id": page_id,
                 "lang": language,
@@ -183,11 +230,13 @@ def extract_dump(
                 "normalized_title": normalize_title(title),
                 "summary": summary,
                 "wiki_url": article_url,
-                "topic_key": extract_topic_key(title=title, wikitext=text, summary=summary),
+                "topic_key": topic_key,
                 "quality_score": 0.5,
                 "is_disambiguation": bool(disambiguation),
                 "source_rev_id": rev_id,
                 "updated_at": updated_at,
+                "entity_type": _infer_entity_type(title=title, summary=summary, topic_key=topic_key),
+                "keywords": _extract_keywords(title=title, summary=summary, topic_key=topic_key),
                 "aliases": [],
             }
             out.write(json.dumps(payload, ensure_ascii=False))

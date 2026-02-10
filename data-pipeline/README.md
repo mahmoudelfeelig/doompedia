@@ -10,6 +10,8 @@ Input files are newline-delimited JSON with these fields:
 - `summary` (str)
 - `wiki_url` (str)
 - `topic_key` (str)
+- `entity_type` (str, optional; e.g. `person`, `place`, `event`, `concept`)
+- `keywords` (list[str], optional)
 - `quality_score` (float, optional)
 - `is_disambiguation` (bool/int, optional)
 - `source_rev_id` (int, optional)
@@ -63,6 +65,12 @@ python -m doompedia_pipeline.build_en_1m_from_sql \
   --output-ndjson out/en-1m/cards.ndjson \
   --target 1000000
 ```
+
+For a full "all available EN summaries" build, use the helper script:
+```bash
+./scripts/build_en_all_pack.sh
+```
+This uses a very high target and emits an `en-all-summaries` pack based on all matching records in the SQL dumps.
 
 3) Build installable shard pack:
 ```bash

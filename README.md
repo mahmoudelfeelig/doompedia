@@ -4,11 +4,12 @@ Offline-first discovery app with 1M Wikipedia summary cards, native Android and 
 
 ## Product summary
 - Cards are available offline after initial setup.
+- Optional online mode can fetch live summaries without downloading a pack first (with local caching).
 - Card tap opens the full article via Wikipedia universal link (Wikipedia app if installed, otherwise browser).
 - No account system and no cloud sync.
 - Deterministic adaptive ranking with explicit controls and transparent explanations.
 - Manifest-driven pack updates with delta-first fallback to full shard refresh.
-- Manual update checks from Settings (auto update polling is disabled by design).
+- Manual update checks from the Packs tab (auto update polling is disabled by design).
 - Attribution/legal surface is integrated in the Settings tab.
 
 ## Repository layout
@@ -41,6 +42,9 @@ Use `scripts/build_en_1m_pack.sh` to generate a real `en-core-1m` pack from Wiki
 - downloads `enwiki-latest-page.sql.gz` and `enwiki-latest-page_props.sql.gz`,
 - builds 1,000,000 title+description+URL card records,
 - emits shard pack + manifest under `data/out/en-1m/pack-v1/`.
+
+To build an "all available EN summaries" pack (very large), use:
+- `scripts/build_en_all_pack.sh`
 
 ## Publish/deploy pack
 - Prepare hosted pack layout: `scripts/publish_pack.sh`

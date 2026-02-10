@@ -119,6 +119,8 @@ def build_pack(args: argparse.Namespace) -> dict[str, object]:
     shard_buffer: list[CardRecord] = []
     shard_metas: list[ShardMeta] = []
     topic_counts = defaultdict(int)
+    entity_counts = defaultdict(int)
+    keyword_counts = defaultdict(int)
     processed = 0
 
     for card in iter_cards(input_path, args.language):
@@ -126,6 +128,9 @@ def build_pack(args: argparse.Namespace) -> dict[str, object]:
             break
         processed += 1
         topic_counts[card.topic_key] += 1
+        entity_counts[card.entity_type] += 1
+        for keyword in card.keywords[:8]:
+            keyword_counts[keyword] += 1
         shard_buffer.append(card)
 
         if len(shard_buffer) >= args.shard_size:
@@ -149,6 +154,9 @@ def build_pack(args: argparse.Namespace) -> dict[str, object]:
             )
         )
 
+    top_topics = sorted(topic_counts.items(), key=lambda item: item[1], reverse=True)
+    top_keywords = sorted(keyword_counts.items(), key=lambda item: item[1], reverse=True)
+
     manifest = {
         "packId": args.pack_id,
         "language": args.language,
@@ -156,6 +164,8 @@ def build_pack(args: argparse.Namespace) -> dict[str, object]:
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "recordCount": processed,
         "compression": args.compression,
+        "description": f"Doompedia {args.language.upper()} pack with {processed:,} summary cards.",
+        "packTags": [topic for topic, _ in top_topics[:12]],
         "shards": [
             {
                 "id": meta.id,
@@ -173,6 +183,8 @@ def build_pack(args: argparse.Namespace) -> dict[str, object]:
             "requiredNotice": "This app uses Wikipedia content. Wikipedia is a trademark of the Wikimedia Foundation."
         },
         "topicDistribution": dict(sorted(topic_counts.items())),
+        "entityDistribution": dict(sorted(entity_counts.items())),
+        "sampleKeywords": [keyword for keyword, _ in top_keywords[:40]],
     }
 
     (output_dir / "manifest.json").write_text(

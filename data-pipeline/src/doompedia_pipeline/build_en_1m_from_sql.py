@@ -29,6 +29,7 @@ def parse_args() -> argparse.Namespace:
 
 
 INSERT_RE = re.compile(r"^INSERT INTO `(?P<table>[^`]+)` VALUES (?P<values>.+);$")
+WORD_RE = re.compile(r"[A-Za-z][A-Za-z-]{2,}")
 
 
 def _normalize_title(title: str) -> str:
@@ -65,6 +66,49 @@ def _topic_key_from_text(title: str, shortdesc: str) -> str:
         if any(keyword in text for keyword in keywords):
             return topic
     return "general"
+
+
+def _entity_type_from_text(title: str, summary: str, topic_key: str) -> str:
+    text = f"{title} {summary}".lower()
+    if topic_key == "biography" or any(token in text for token in (" born ", " died ", " actor ", " author ")):
+        return "person"
+    if topic_key == "geography" or any(token in text for token in (" city ", " country ", " river ", " mountain ")):
+        return "place"
+    if topic_key == "history" or any(token in text for token in (" war ", " battle ", " revolution ")):
+        return "event"
+    return "concept"
+
+
+def _keywords_from_text(title: str, summary: str, topic_key: str) -> list[str]:
+    seen: set[str] = set()
+    keywords: list[str] = []
+    stopwords = {
+        "about", "after", "before", "their", "there", "which", "while", "where", "these", "those",
+        "through", "using", "under", "between", "during", "known", "wikipedia", "article",
+    }
+
+    def add(raw: str) -> None:
+        normalized = _normalize_title(raw).replace(" ", "-")
+        if not normalized or normalized in seen:
+            return
+        seen.add(normalized)
+        keywords.append(normalized)
+
+    add(topic_key)
+
+    for token in WORD_RE.findall(title.lower()):
+        if len(token) >= 4 and token not in stopwords:
+            add(token)
+        if len(keywords) >= 8:
+            break
+
+    for token in WORD_RE.findall(summary.lower()):
+        if len(token) >= 5 and token not in stopwords:
+            add(token)
+        if len(keywords) >= 12:
+            break
+
+    return keywords[:12]
 
 
 def _parse_sql_values(values_blob: str) -> list[list[str | None]]:
@@ -250,6 +294,7 @@ def build_cards(
             if summary is None:
                 continue
 
+            topic_key = _topic_key_from_text(title=title, shortdesc=summary)
             record = {
                 "page_id": page_id,
                 "lang": language,
@@ -257,11 +302,13 @@ def build_cards(
                 "normalized_title": _normalize_title(title.replace("_", " ")),
                 "summary": summary,
                 "wiki_url": f"https://{language}.wikipedia.org/wiki/{quote(title)}",
-                "topic_key": _topic_key_from_text(title=title, shortdesc=summary),
+                "topic_key": topic_key,
                 "quality_score": 0.5,
                 "is_disambiguation": "(disambiguation)" in title.lower(),
                 "source_rev_id": None,
                 "updated_at": "1970-01-01T00:00:00Z",
+                "entity_type": _entity_type_from_text(title=title, summary=summary, topic_key=topic_key),
+                "keywords": _keywords_from_text(title=title, summary=summary, topic_key=topic_key),
                 "aliases": [],
             }
             out.write(json.dumps(record, ensure_ascii=False))

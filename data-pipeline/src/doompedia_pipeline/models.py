@@ -18,6 +18,8 @@ class CardRecord:
     is_disambiguation: bool = False
     source_rev_id: int | None = None
     updated_at: str = "1970-01-01T00:00:00Z"
+    entity_type: str = "concept"
+    keywords: list[str] = field(default_factory=list)
     aliases: list[str] = field(default_factory=list)
 
     @property
@@ -37,6 +39,8 @@ class CardRecord:
             "is_disambiguation": bool(self.is_disambiguation),
             "source_rev_id": self.source_rev_id,
             "updated_at": self.updated_at,
+            "entity_type": self.entity_type,
+            "keywords": self.keywords,
         }
 
     @classmethod
@@ -68,5 +72,7 @@ class CardRecord:
                 else None
             ),
             updated_at=str(payload.get("updated_at", "1970-01-01T00:00:00Z")),
+            entity_type=str(payload.get("entity_type", "concept")),
+            keywords=[str(keyword) for keyword in payload.get("keywords", [])][:12],
             aliases=[str(alias) for alias in payload.get("aliases", [])],
         )

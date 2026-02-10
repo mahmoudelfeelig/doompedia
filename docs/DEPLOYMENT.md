@@ -14,6 +14,11 @@ The manifest is the "table of contents" for your 1M pack. It tells the app:
 ./scripts/build_en_1m_pack.sh
 ```
 
+For a full EN "all available summaries" build:
+```bash
+./scripts/build_en_all_pack.sh
+```
+
 Expected output:
 - `data/out/en-1m/pack-v1/manifest.json`
 - `data/out/en-1m/pack-v1/shards/*`
@@ -72,13 +77,13 @@ Recommended response headers:
 - Start with one pack (`en-core-1m/v1`) and avoid frequent full-pack re-publishes.
 
 ## 7) Configure app manifest URL
-In app settings set:
+In app Packs tab set:
 `https://packs.example.com/packs/en-core-1m/v1/manifest.json`
 
 Use HTTPS only; Android blocks cleartext HTTP by default.
 
 ## 8) Verify update path on device
-- Open app Settings.
+- Open app Packs tab.
 - Enter manifest URL.
 - Tap `Check updates now`.
 - Confirm installed pack version updates.

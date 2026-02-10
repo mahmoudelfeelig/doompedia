@@ -33,6 +33,13 @@
       "type": "integer",
       "minimum": 1
     },
+    "description": {
+      "type": "string"
+    },
+    "packTags": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
     "compression": {
       "type": "string",
       "enum": ["gzip", "none"]
@@ -98,6 +105,17 @@
         "type": "integer",
         "minimum": 0
       }
+    },
+    "entityDistribution": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "sampleKeywords": {
+      "type": "array",
+      "items": { "type": "string" }
     },
     "attribution": {
       "type": "object",
