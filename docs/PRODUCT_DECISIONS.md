@@ -20,7 +20,7 @@
 
 ## 2) Source, license, and attribution
 - Bulk content is generated from Wikimedia dump data through pipeline jobs.
-- App must provide a dedicated attribution screen with:
+- App must provide a dedicated attribution surface (integrated in Settings) with:
   - source statement,
   - CC BY-SA license notice,
   - license URL,
@@ -69,7 +69,7 @@
 
 ## 6) Personalization and adaptivity
 - Default personalization level: `LOW`.
-- Optional levels: `OFF`, `LOW`, `MEDIUM`.
+- Optional levels: `OFF`, `LOW`, `MEDIUM`, `HIGH`.
 - Deterministic scoring formula:
   - `score = interest + novelty + diversity + quality - repetitionPenalty`
 - Guardrails:

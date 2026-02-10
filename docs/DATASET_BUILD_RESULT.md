@@ -17,6 +17,18 @@
 - Version: `1`
 - Shards: `25`
 - Compression: `none`
+- Published pack verification:
+  - `manifest.recordCount = 1,000,000`
+  - declared shard record sum = `1,000,000`
+  - actual shard line sum = `1,000,000`
+  - missing shards = `0`
+
+## Verification command
+```bash
+python3 data-pipeline/src/doompedia_pipeline/verify_pack.py \
+  --manifest data/site/packs/en-core-1m/v1/manifest.json \
+  --count-lines
+```
 
 ## Notes
 - Raw dump inputs are stored locally under `data/dumps/enwiki/latest/`.

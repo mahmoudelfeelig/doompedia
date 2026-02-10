@@ -1,22 +1,27 @@
 # Implementation Status
 
-## Implemented now
-- Product decisions locked and documented.
-- Shared spec files for schema, search, ranking config, and manifest contract.
-- Data pipeline scripts for Wikimedia dump extraction, pack shard generation, and delta generation.
-- Android native app scaffold with Room, ranking, search, settings, and article deep-link behavior.
-- iOS native app scaffold with SQLite, ranking, search, settings, and article deep-link behavior.
-- Local pack installer/delta applier/downloader on both platforms.
-- Android periodic background update worker (manifest check + delta/full fallback).
-- iOS manual update flow plus automatic periodic check on app launch.
-- Repository CI workflow for pipeline tests plus Android unit-test and iOS build validation.
-- Manual-dispatch release workflow for Android and iOS build artifacts.
-- Dedicated attribution screen on both platforms.
-- Offline link guard that informs user full article needs connection.
-- Cross-platform ranking/search parity hardening (deterministic ordering + stronger guardrails).
-- iOS runtime gzip shard/delta decoding support.
-- Pack publishing/deployment tooling for static hosting.
+## Done
+- Shared contracts are in place (`shared-spec/`) for schema, ranking config, search behavior, and pack manifest.
+- Data pipeline supports dump extraction, 1M build, shard pack generation, delta generation, publish layout, and pack verification.
+- `data/site/packs/en-core-1m/v1` contains a complete 1,000,000-card pack:
+  - 25 shards present
+  - manifest declares 1,000,000 records
+  - verifier confirms actual shard line total is 1,000,000
+- Android app implements:
+  - feed/search/offline bootstrap
+  - card tap opens article URL
+  - recommendation controls (`Show more`, `Show less`)
+  - info button (`i`) for descriptive "Why this is shown"
+  - save folders (multi-folder assignment) with Bookmarks default
+  - Saved tab (folder create/delete/select)
+  - settings import/export JSON
+  - personalization levels `OFF/LOW/MEDIUM/HIGH`
+  - theme mode + accent color presets + custom hex accent
+  - manual updates only
+- iOS app implements parity for the above core features (feed/search/saved/settings/adaptive controls/manual updates).
+- iOS CI workflow exists to build from Windows via GitHub-hosted macOS:
+  - `.github/workflows/ios-build.yml`
 
-## Remaining non-code release work
-- Device-matrix performance validation against targets in product decisions.
-- Store signing/provisioning setup for production app-store submission.
+## Remaining external work (not code gaps)
+- End-to-end validation on physical Android and iOS devices across a real test matrix.
+- App-store signing/provisioning and release publishing configuration.

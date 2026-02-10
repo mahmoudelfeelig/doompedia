@@ -8,7 +8,8 @@ Offline-first discovery app with 1M Wikipedia summary cards, native Android and 
 - No account system and no cloud sync.
 - Deterministic adaptive ranking with explicit controls and transparent explanations.
 - Manifest-driven pack updates with delta-first fallback to full shard refresh.
-- Dedicated attribution/legal surface aligned to Wikimedia requirements.
+- Manual update checks from Settings (auto update polling is disabled by design).
+- Attribution/legal surface is integrated in the Settings tab.
 
 ## Repository layout
 - `docs/` product and technical decisions.
@@ -21,7 +22,7 @@ Offline-first discovery app with 1M Wikipedia summary cards, native Android and 
 - `1,000,000` cards from English Wikipedia main namespace (`ns=0`).
 - Disambiguation pages excluded from feed but retained for search routing.
 - Title-only search in MVP (exact/prefix/alias + small typo tolerance).
-- Personalization default: `LOW` with `OFF` and `MEDIUM` options.
+- Personalization default: `LOW` with `OFF`, `LOW`, `MEDIUM`, `HIGH` options.
 - Chunked pack install with resumable shard download and checksum validation.
 - Default transport compression is `none`, with optional `gzip` pipeline output (supported by both Android and iOS runtimes).
 
@@ -45,6 +46,11 @@ Use `scripts/build_en_1m_pack.sh` to generate a real `en-core-1m` pack from Wiki
 - Prepare hosted pack layout: `scripts/publish_pack.sh`
 - Deploy to S3-compatible storage: `scripts/deploy_pack_to_s3.sh`
 - See full guide: `docs/DEPLOYMENT.md`
+
+## iOS builds from Windows
+- Native iOS compilation still requires macOS.
+- This repo includes CI at `.github/workflows/ios-build.yml` to build unsigned simulator artifacts on GitHub-hosted macOS.
+- From Windows, trigger the workflow in GitHub Actions and download the produced `doompedia-ios-simulator-debug` artifact.
 
 ## Release readiness
 - Full release checklist: `docs/RELEASE_CHECKLIST.md`

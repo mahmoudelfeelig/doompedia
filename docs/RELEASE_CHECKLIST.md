@@ -15,15 +15,16 @@
 ## Android
 - Build unit tests:
   - `cd android-app`
-  - `gradle testDebugUnitTest`
+  - `./gradlew testDebugUnitTest`
 - Build release artifact:
-  - `gradle assembleRelease`
+  - `./gradlew assembleRelease`
 - Manual QA:
   - first run seed load
   - manifest update check
-  - offline feed/search/bookmarks
+  - offline feed/search/bookmarks/saved-folders
   - TalkBack navigation
-  - light/dark/system theme
+  - light/dark/system theme + accent color
+  - settings import/export JSON
 
 ## iOS
 - Generate and build:
@@ -33,9 +34,10 @@
 - Manual QA:
   - first run seed load
   - manifest update check
-  - offline feed/search/bookmarks
+  - offline feed/search/bookmarks/saved-folders
   - VoiceOver navigation
-  - dynamic type + light/dark
+  - dynamic type + light/dark + accent color
+  - settings import/export JSON
 
 ## Go/No-Go
 - Pack manifest URL works from clean install.
@@ -43,4 +45,4 @@
   - Android mid-tier device
   - iPhone recent simulator/device
 - Accessibility checks pass for core flows.
-- Attribution screen and license links verified.
+- Attribution section in Settings and license links verified.
