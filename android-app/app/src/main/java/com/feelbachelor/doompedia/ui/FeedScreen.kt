@@ -25,7 +25,8 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -78,6 +79,8 @@ fun FeedScreen(
     }
     var selectedSort by rememberSaveable { mutableStateOf(FeedSortOption.RELEVANCE) }
     var selectedFilter by rememberSaveable { mutableStateOf("All") }
+    var showSortMenu by rememberSaveable { mutableStateOf(false) }
+    var showFilterMenu by rememberSaveable { mutableStateOf(false) }
     var requestedBootstrapRefresh by rememberSaveable { mutableStateOf(false) }
 
     val availableFilters = remember(cards) {
@@ -136,45 +139,63 @@ fun FeedScreen(
             singleLine = true,
         )
 
-        Text(
-            text = "Sort",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        FlowRow(
+        Row(
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            FeedSortOption.entries.forEach { option ->
-                FilterChip(
-                    selected = selectedSort == option,
-                    onClick = { selectedSort = option },
-                    label = { Text(option.label) },
-                )
+            Box {
+                OutlinedButton(onClick = { showSortMenu = true }) {
+                    Text("Sort: ${selectedSort.label}")
+                }
+                DropdownMenu(
+                    expanded = showSortMenu,
+                    onDismissRequest = { showSortMenu = false },
+                ) {
+                    FeedSortOption.entries.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option.label) },
+                            onClick = {
+                                selectedSort = option
+                                showSortMenu = false
+                            },
+                        )
+                    }
+                }
             }
-        }
 
-        if (availableFilters.isNotEmpty()) {
-            Text(
-                text = "Filters",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                FilterChip(
-                    selected = selectedFilter == "All",
-                    onClick = { selectedFilter = "All" },
-                    label = { Text("All") },
-                )
-                availableFilters.forEach { filter ->
-                    FilterChip(
-                        selected = selectedFilter == filter,
-                        onClick = { selectedFilter = filter },
-                        label = { Text(filter) },
+            Box {
+                OutlinedButton(
+                    onClick = { showFilterMenu = true },
+                    enabled = availableFilters.isNotEmpty(),
+                ) {
+                    Text(
+                        if (selectedFilter == "All") {
+                            "Filter: All"
+                        } else {
+                            "Filter: $selectedFilter"
+                        },
                     )
+                }
+                DropdownMenu(
+                    expanded = showFilterMenu,
+                    onDismissRequest = { showFilterMenu = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("All") },
+                        onClick = {
+                            selectedFilter = "All"
+                            showFilterMenu = false
+                        },
+                    )
+                    availableFilters.forEach { filter ->
+                        DropdownMenuItem(
+                            text = { Text(filter) },
+                            onClick = {
+                                selectedFilter = filter
+                                showFilterMenu = false
+                            },
+                        )
+                    }
                 }
             }
         }
