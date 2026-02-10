@@ -53,6 +53,7 @@ fun SettingsScreen(
     onOpenExternalUrl: (String) -> Unit,
 ) {
     var accentHexDraft by remember(settings.accentHex) { mutableStateOf(settings.accentHex) }
+    var fontScaleDraft by remember(settings.fontScale) { mutableFloatStateOf(settings.fontScale) }
     var importDraft by remember { mutableStateOf("") }
     var hue by remember { mutableFloatStateOf(0f) }
     var saturation by remember { mutableFloatStateOf(0f) }
@@ -67,6 +68,7 @@ fun SettingsScreen(
         saturation = hsv[1]
         value = hsv[2]
         accentHexDraft = settings.accentHex
+        fontScaleDraft = settings.fontScale
     }
 
     val presets = listOf(
@@ -81,7 +83,6 @@ fun SettingsScreen(
     fun updateGeneratedColor(newHue: Float = hue, newSaturation: Float = saturation, newValue: Float = value) {
         val generatedHex = hsvToColor(newHue, newSaturation, newValue).toHexColor()
         accentHexDraft = generatedHex
-        onSetAccentHex(generatedHex)
     }
 
     LazyColumn(
@@ -213,6 +214,7 @@ fun SettingsScreen(
                     hue = it
                     updateGeneratedColor(newHue = it)
                 },
+                onValueChangeFinished = { onSetAccentHex(accentHexDraft) },
                 valueRange = 0f..360f,
             )
             Text("Saturation: ${(saturation * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall)
@@ -222,6 +224,7 @@ fun SettingsScreen(
                     saturation = it
                     updateGeneratedColor(newSaturation = it)
                 },
+                onValueChangeFinished = { onSetAccentHex(accentHexDraft) },
                 valueRange = 0f..1f,
             )
             Text("Brightness: ${(value * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall)
@@ -231,6 +234,7 @@ fun SettingsScreen(
                     value = it
                     updateGeneratedColor(newValue = it)
                 },
+                onValueChangeFinished = { onSetAccentHex(accentHexDraft) },
                 valueRange = 0f..1f,
             )
         }
@@ -241,12 +245,16 @@ fun SettingsScreen(
                 value = accentHexDraft,
                 onValueChange = {
                     accentHexDraft = it
-                    onSetAccentHex(it)
                 },
                 label = { Text("Accent hex color") },
                 placeholder = { Text("#0B6E5B") },
                 singleLine = true,
             )
+        }
+        item {
+            TextButton(onClick = { onSetAccentHex(accentHexDraft) }) {
+                Text("Apply accent color")
+            }
         }
 
         item { HorizontalDivider() }
@@ -257,12 +265,13 @@ fun SettingsScreen(
 
         item {
             Text(
-                text = "Font size (${(settings.fontScale * 100).roundToInt()}%)",
+                text = "Font size (${(fontScaleDraft * 100).roundToInt()}%)",
                 style = MaterialTheme.typography.bodySmall,
             )
             Slider(
-                value = settings.fontScale,
-                onValueChange = onSetFontScale,
+                value = fontScaleDraft,
+                onValueChange = { fontScaleDraft = it },
+                onValueChangeFinished = { onSetFontScale(fontScaleDraft) },
                 valueRange = 0.85f..1.35f,
             )
         }
