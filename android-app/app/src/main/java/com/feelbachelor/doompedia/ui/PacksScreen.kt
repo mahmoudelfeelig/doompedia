@@ -77,7 +77,7 @@ fun PacksScreen(
                     )
                     if (pack.includedTopics.isNotEmpty()) {
                         Text(
-                            text = "Includes: ${pack.includedTopics.joinToString(limit = 8, truncated = \"…\")}",
+                            text = "Includes: ${pack.includedTopics.joinToString(limit = 8, truncated = "…")}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
