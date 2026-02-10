@@ -140,4 +140,6 @@ jobs:
         if: always()
         run: |
           set +e
-          security delete-keychain "$KEYCHAIN_PATH"
+          if [ -n "${KEYCHAIN_PATH:-}" ] && [ -f "$KEYCHAIN_PATH" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
