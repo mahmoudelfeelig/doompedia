@@ -29,12 +29,49 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def extract_topic_key(wikitext: str) -> str:
+def extract_topic_key(title: str, wikitext: str, summary: str) -> str:
     match = _CATEGORY_RE.search(wikitext)
-    if not match:
-        return "general"
-    category = match.group(1)
-    return normalize_title(category).replace(" ", "-") or "general"
+    if match:
+        category = normalize_title(match.group(1))
+        if "history" in category:
+            return "history"
+        if any(token in category for token in ("country", "cities", "mountains", "rivers", "geography")):
+            return "geography"
+        if any(token in category for token in ("science", "biology", "physics", "chemistry", "mathematics")):
+            return "science"
+        if any(token in category for token in ("technology", "computing", "software", "internet")):
+            return "technology"
+        if any(token in category for token in ("politics", "governments", "elections")):
+            return "politics"
+        if any(token in category for token in ("economy", "finance", "business", "companies")):
+            return "economics"
+        if any(token in category for token in ("sport", "athletes", "teams")):
+            return "sports"
+        if any(token in category for token in ("medicine", "health", "diseases")):
+            return "health"
+        if any(token in category for token in ("environment", "ecology", "climate")):
+            return "environment"
+        if any(token in category for token in ("artists", "music", "films", "literature", "culture", "religion")):
+            return "culture"
+
+    text = f"{title} {summary} {wikitext[:2000]}".lower()
+    rules: list[tuple[str, tuple[str, ...]]] = [
+        ("biography", ("born", "died", "actor", "author", "scientist", "politician", "player")),
+        ("history", ("empire", "war", "century", "kingdom", "revolution", "historical")),
+        ("science", ("physics", "chemistry", "biology", "mathematics", "astronomy", "scientific")),
+        ("technology", ("software", "computer", "internet", "digital", "algorithm", "device")),
+        ("geography", ("river", "mountain", "city", "country", "region", "province", "capital")),
+        ("politics", ("election", "government", "parliament", "minister", "policy", "party")),
+        ("economics", ("economy", "market", "trade", "finance", "currency", "industry")),
+        ("health", ("disease", "medical", "medicine", "health", "hospital", "symptom")),
+        ("sports", ("football", "basketball", "olympic", "league", "athlete", "championship")),
+        ("environment", ("climate", "ecology", "forest", "wildlife", "pollution", "conservation")),
+        ("culture", ("music", "film", "literature", "art", "religion", "language")),
+    ]
+    for topic, keywords in rules:
+        if any(keyword in text for keyword in keywords):
+            return topic
+    return "general"
 
 
 def extract_summary(wikitext: str, min_summary: int, max_summary: int) -> str | None:
@@ -150,9 +187,9 @@ def extract_dump(
                 "normalized_title": normalize_title(title),
                 "summary": summary,
                 "wiki_url": article_url,
-                "topic_key": extract_topic_key(text),
+                "topic_key": extract_topic_key(title=title, wikitext=text, summary=summary),
                 "quality_score": 0.5,
-                "is_disambiguation": int(disambiguation),
+                "is_disambiguation": bool(disambiguation),
                 "source_rev_id": rev_id,
                 "updated_at": updated_at,
                 "aliases": [],

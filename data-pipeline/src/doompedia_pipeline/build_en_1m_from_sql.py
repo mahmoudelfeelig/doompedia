@@ -36,11 +36,34 @@ def _normalize_title(title: str) -> str:
     return re.sub(r"\s+", " ", text)
 
 
-def _topic_key_from_title(title: str) -> str:
-    base = title.replace("_", " ").strip()
-    for token in ("list of ", "history of ", "geography of ", "economy of "):
-        if base.lower().startswith(token):
-            return token.strip().replace(" ", "-")
+def _topic_key_from_text(title: str, shortdesc: str) -> str:
+    base = title.replace("_", " ").strip().lower()
+    if base.startswith("history of "):
+        return "history"
+    if base.startswith("geography of "):
+        return "geography"
+    if base.startswith("economy of "):
+        return "economics"
+    if base.startswith("list of "):
+        return "culture"
+
+    text = f"{base} {shortdesc.lower()}"
+    rules: list[tuple[str, tuple[str, ...]]] = [
+        ("biography", ("born", "died", "actor", "author", "scientist", "politician", "player")),
+        ("history", ("empire", "war", "century", "kingdom", "revolution", "historical")),
+        ("science", ("physics", "chemistry", "biology", "mathematics", "astronomy", "scientific")),
+        ("technology", ("software", "computer", "internet", "digital", "algorithm", "device")),
+        ("geography", ("river", "mountain", "city", "country", "region", "province", "capital")),
+        ("politics", ("election", "government", "parliament", "minister", "policy", "party")),
+        ("economics", ("economy", "market", "trade", "finance", "currency", "industry")),
+        ("health", ("disease", "medical", "medicine", "health", "hospital", "symptom")),
+        ("sports", ("football", "basketball", "olympic", "league", "athlete", "championship")),
+        ("environment", ("climate", "ecology", "forest", "wildlife", "pollution", "conservation")),
+        ("culture", ("music", "film", "literature", "art", "religion", "language")),
+    ]
+    for topic, keywords in rules:
+        if any(keyword in text for keyword in keywords):
+            return topic
     return "general"
 
 
@@ -234,9 +257,9 @@ def build_cards(
                 "normalized_title": _normalize_title(title.replace("_", " ")),
                 "summary": summary,
                 "wiki_url": f"https://{language}.wikipedia.org/wiki/{quote(title)}",
-                "topic_key": _topic_key_from_title(title),
+                "topic_key": _topic_key_from_text(title=title, shortdesc=summary),
                 "quality_score": 0.5,
-                "is_disambiguation": 1 if "(disambiguation)" in title.lower() else 0,
+                "is_disambiguation": "(disambiguation)" in title.lower(),
                 "source_rev_id": None,
                 "updated_at": "1970-01-01T00:00:00Z",
                 "aliases": [],
