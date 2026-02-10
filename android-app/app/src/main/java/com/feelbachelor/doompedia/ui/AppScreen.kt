@@ -2,7 +2,7 @@ package com.feelbachelor.doompedia.ui
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Article
+import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.CloudDownload
 import androidx.compose.material.icons.outlined.Settings
@@ -27,7 +27,7 @@ import com.feelbachelor.doompedia.domain.ReadSort
 import com.feelbachelor.doompedia.domain.ThemeMode
 
 private enum class Tab(val title: String, val icon: ImageVector) {
-    FEED("Explore", Icons.Outlined.Article),
+    FEED("Explore", Icons.AutoMirrored.Outlined.Article),
     SAVED("Saved", Icons.Outlined.Bookmark),
     PACKS("Packs", Icons.Outlined.CloudDownload),
     SETTINGS("Settings", Icons.Outlined.Settings),
