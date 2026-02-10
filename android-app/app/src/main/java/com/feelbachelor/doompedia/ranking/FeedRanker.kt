@@ -89,6 +89,8 @@ class FeedRanker(
             for (base in rankedBase) {
                 if (result.size >= limit) break
                 if (!selectedIds.add(base.card.pageId)) continue
+                if (selectedTopics.count { it == base.card.topicKey } >= config.guardrails.maxSameTopicInWindow) continue
+                if (wouldViolateDistinctTopicGuardrail(selectedTopics, base.card.topicKey)) continue
 
                 val diversity = diversityScore(base.card.topicKey, selectedTopics)
                 val score = base.score + diversity

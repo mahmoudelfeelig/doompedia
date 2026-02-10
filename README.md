@@ -50,7 +50,15 @@ Use `scripts/build_en_1m_pack.sh` to generate a real `en-core-1m` pack from Wiki
 ## iOS builds from Windows
 - Native iOS compilation still requires macOS.
 - This repo includes CI at `.github/workflows/ios-build.yml` to build unsigned simulator artifacts on GitHub-hosted macOS.
-- From Windows, trigger the workflow in GitHub Actions and download the produced `doompedia-ios-simulator-debug` artifact.
+- For device-installable builds, use `.github/workflows/ios-signed-ipa.yml` (manual trigger).
+- Required GitHub repo secrets for signed IPA:
+  - `IOS_P12_BASE64`
+  - `IOS_P12_PASSWORD`
+  - `IOS_PROVISIONING_PROFILE_BASE64`
+  - `IOS_TEAM_ID`
+  - Optional: `IOS_BUNDLE_ID` (defaults to `com.feelbachelor.doompedia.ios`)
+  - Optional: `IOS_CODE_SIGN_IDENTITY` (defaults to `Apple Distribution`)
+- From Windows, trigger the workflow in GitHub Actions and download the `doompedia-ios-signed` artifact (`.ipa`).
 
 ## Release readiness
 - Full release checklist: `docs/RELEASE_CHECKLIST.md`

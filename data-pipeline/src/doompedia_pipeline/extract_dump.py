@@ -29,30 +29,26 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def extract_topic_key(title: str, wikitext: str, summary: str) -> str:
+def extract_topic_key(title: str, wikitext: str | None = None, summary: str | None = None) -> str:
+    """
+    Derive a stable topic key for cards.
+
+    Backward compatibility:
+    - extract_topic_key(wikitext)
+    - extract_topic_key(title=..., wikitext=..., summary=...)
+    """
+    # Legacy call support: single positional argument was wikitext only.
+    if wikitext is None and summary is None:
+        wikitext = title
+        title = ""
+    if wikitext is None:
+        wikitext = ""
+    if summary is None:
+        summary = ""
+
     match = _CATEGORY_RE.search(wikitext)
     if match:
-        category = normalize_title(match.group(1))
-        if "history" in category:
-            return "history"
-        if any(token in category for token in ("country", "cities", "mountains", "rivers", "geography")):
-            return "geography"
-        if any(token in category for token in ("science", "biology", "physics", "chemistry", "mathematics")):
-            return "science"
-        if any(token in category for token in ("technology", "computing", "software", "internet")):
-            return "technology"
-        if any(token in category for token in ("politics", "governments", "elections")):
-            return "politics"
-        if any(token in category for token in ("economy", "finance", "business", "companies")):
-            return "economics"
-        if any(token in category for token in ("sport", "athletes", "teams")):
-            return "sports"
-        if any(token in category for token in ("medicine", "health", "diseases")):
-            return "health"
-        if any(token in category for token in ("environment", "ecology", "climate")):
-            return "environment"
-        if any(token in category for token in ("artists", "music", "films", "literature", "culture", "religion")):
-            return "culture"
+        return normalize_title(match.group(1)).replace(" ", "-")
 
     text = f"{title} {summary} {wikitext[:2000]}".lower()
     rules: list[tuple[str, tuple[str, ...]]] = [
