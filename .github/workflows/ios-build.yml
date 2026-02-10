@@ -24,12 +24,14 @@ jobs:
       - name: Build iOS app (simulator, unsigned)
         working-directory: ios-app
         run: |
+          # Use a generic simulator destination so CI does not depend on one exact
+          # device name (e.g., "iPhone 15") being present on the runner image.
           xcodebuild \
             -project Doompedia.xcodeproj \
             -scheme Doompedia \
             -configuration Debug \
             -sdk iphonesimulator \
-            -destination "platform=iOS Simulator,name=iPhone 15" \
+            -destination "generic/platform=iOS Simulator" \
             CODE_SIGNING_ALLOWED=NO \
             build
       - name: Package simulator .app
