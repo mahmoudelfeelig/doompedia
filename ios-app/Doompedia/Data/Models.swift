@@ -13,16 +13,71 @@ enum ThemeMode: String, CaseIterable, Codable {
     case dark = "DARK"
 }
 
+enum FeedMode: String, CaseIterable, Codable {
+    case offline = "OFFLINE"
+    case online = "ONLINE"
+}
+
+enum ReadSort: String, CaseIterable, Codable {
+    case newestFirst = "NEWEST_FIRST"
+    case oldestFirst = "OLDEST_FIRST"
+}
+
 struct UserSettings: Codable {
     var language: String = "en"
     var personalizationLevel: PersonalizationLevel = .low
+    var feedMode: FeedMode = .offline
     var themeMode: ThemeMode = .system
     var accentHex: String = "#0B6E5B"
+    var fontScale: Double = 1.0
+    var highContrast: Bool = false
+    var reduceMotion: Bool = false
+    var readSort: ReadSort = .newestFirst
     var wifiOnlyDownloads: Bool = true
     var manifestURL: String = ""
     var installedPackVersion: Int = 0
     var lastUpdateISO: String = ""
     var lastUpdateStatus: String = ""
+    var customPacksJSON: String = "[]"
+
+    private enum CodingKeys: String, CodingKey {
+        case language
+        case personalizationLevel
+        case feedMode
+        case themeMode
+        case accentHex
+        case fontScale
+        case highContrast
+        case reduceMotion
+        case readSort
+        case wifiOnlyDownloads
+        case manifestURL
+        case installedPackVersion
+        case lastUpdateISO
+        case lastUpdateStatus
+        case customPacksJSON
+    }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        language = try container.decodeIfPresent(String.self, forKey: .language) ?? "en"
+        personalizationLevel = try container.decodeIfPresent(PersonalizationLevel.self, forKey: .personalizationLevel) ?? .low
+        feedMode = try container.decodeIfPresent(FeedMode.self, forKey: .feedMode) ?? .offline
+        themeMode = try container.decodeIfPresent(ThemeMode.self, forKey: .themeMode) ?? .system
+        accentHex = try container.decodeIfPresent(String.self, forKey: .accentHex) ?? "#0B6E5B"
+        fontScale = try container.decodeIfPresent(Double.self, forKey: .fontScale) ?? 1.0
+        highContrast = try container.decodeIfPresent(Bool.self, forKey: .highContrast) ?? false
+        reduceMotion = try container.decodeIfPresent(Bool.self, forKey: .reduceMotion) ?? false
+        readSort = try container.decodeIfPresent(ReadSort.self, forKey: .readSort) ?? .newestFirst
+        wifiOnlyDownloads = try container.decodeIfPresent(Bool.self, forKey: .wifiOnlyDownloads) ?? true
+        manifestURL = try container.decodeIfPresent(String.self, forKey: .manifestURL) ?? ""
+        installedPackVersion = try container.decodeIfPresent(Int.self, forKey: .installedPackVersion) ?? 0
+        lastUpdateISO = try container.decodeIfPresent(String.self, forKey: .lastUpdateISO) ?? ""
+        lastUpdateStatus = try container.decodeIfPresent(String.self, forKey: .lastUpdateStatus) ?? ""
+        customPacksJSON = try container.decodeIfPresent(String.self, forKey: .customPacksJSON) ?? "[]"
+    }
 }
 
 struct SaveFolderSummary: Identifiable, Hashable {

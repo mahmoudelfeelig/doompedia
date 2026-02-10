@@ -1,11 +1,21 @@
 import SwiftUI
 
+private enum FeedSortOption: String, CaseIterable {
+    case recommended = "Recommended"
+    case titleAsc = "A-Z"
+    case titleDesc = "Z-A"
+    case quality = "Quality"
+}
+
 struct FeedView: View {
     @ObservedObject var viewModel: MainViewModel
     @Environment(\.openURL) private var openURL
 
-    @State private var whyMessage: String = ""
+    @State private var whyMessage = ""
     @State private var showWhyAlert = false
+    @State private var selectedSort: FeedSortOption = .recommended
+    @State private var selectedFilter: String = "All"
+    @State private var didInitialRefresh = false
 
     private var items: [RankedCard] {
         if viewModel.query.isEmpty {
@@ -16,9 +26,35 @@ struct FeedView: View {
         }
     }
 
+    private var availableFilters: [String] {
+        Array(Set(items.flatMap { buildTags(for: $0.card) }))
+            .sorted()
+            .prefix(14)
+            .map { $0 }
+    }
+
+    private var visibleItems: [RankedCard] {
+        var filtered = items
+        if selectedFilter != "All" {
+            filtered = filtered.filter { ranked in
+                buildTags(for: ranked.card).contains(where: { $0.caseInsensitiveCompare(selectedFilter) == .orderedSame })
+            }
+        }
+        switch selectedSort {
+        case .recommended:
+            return filtered
+        case .titleAsc:
+            return filtered.sorted { $0.card.title.localizedCaseInsensitiveCompare($1.card.title) == .orderedAscending }
+        case .titleDesc:
+            return filtered.sorted { $0.card.title.localizedCaseInsensitiveCompare($1.card.title) == .orderedDescending }
+        case .quality:
+            return filtered.sorted { $0.card.qualityScore > $1.card.qualityScore }
+        }
+    }
+
     var body: some View {
         NavigationStack {
-            VStack(spacing: 12) {
+            VStack(spacing: 10) {
                 TextField("Search title", text: Binding(
                     get: { viewModel.query },
                     set: { viewModel.updateQuery($0) }
@@ -27,65 +63,98 @@ struct FeedView: View {
                 .padding(.horizontal, 16)
                 .accessibilityLabel("Search by title")
 
+                HStack(spacing: 12) {
+                    Menu {
+                        ForEach(FeedSortOption.allCases, id: \.self) { option in
+                            Button(option.rawValue) { selectedSort = option }
+                        }
+                    } label: {
+                        Label("Sort: \(selectedSort.rawValue)", systemImage: "line.3.horizontal.decrease.circle")
+                    }
+
+                    Menu {
+                        Button("All") { selectedFilter = "All" }
+                        ForEach(availableFilters, id: \.self) { filter in
+                            Button(filter) { selectedFilter = filter }
+                        }
+                    } label: {
+                        Label("Filter: \(selectedFilter)", systemImage: "tag")
+                    }
+
+                    Spacer()
+                }
+                .font(.subheadline)
+                .padding(.horizontal, 16)
+
                 if viewModel.isLoading {
                     ProgressView()
-                        .padding(.top, 16)
+                        .padding(.top, 8)
                 }
 
-                List(items) { ranked in
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 6) {
-                                    ForEach(buildTags(for: ranked.card), id: \.self) { tag in
-                                        Text(tag)
-                                            .font(.caption2.weight(.semibold))
-                                            .foregroundStyle(.secondary)
-                                            .padding(.horizontal, 8)
-                                            .padding(.vertical, 4)
-                                            .background(Color.secondary.opacity(0.12))
-                                            .clipShape(Capsule())
-                                    }
-                                }
-                            }
-                            Button("i") {
+                List(visibleItems) { ranked in
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(alignment: .top, spacing: 8) {
+                            Text(ranked.card.title)
+                                .font(.headline)
+                                .lineLimit(3)
+                            Spacer(minLength: 8)
+                            Button {
                                 whyMessage = """
-                                This recommendation is based on your recent reading behavior, diversity rules, and controlled exploration.
+                                This card is shown using your personalization level, diversity guardrails, and controlled exploration.
 
                                 \(ranked.why)
                                 """
                                 showWhyAlert = true
+                            } label: {
+                                Image(systemName: "info.circle")
+                                    .font(.headline)
                             }
-                            .font(.caption.weight(.bold))
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Why this is shown")
                         }
 
-                        Text(ranked.card.title)
-                            .font(.headline)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(buildTags(for: ranked.card), id: \.self) { tag in
+                                    Text(tag)
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Color.secondary.opacity(0.12))
+                                        .clipShape(Capsule())
+                                }
+                            }
+                        }
 
                         Text(ranked.card.summary)
                             .font(.subheadline)
-                            .lineLimit(4)
+                            .lineLimit(8)
 
-                        HStack {
-                            Button(ranked.card.bookmarked ? "Unsave" : "Save") {
-                                Task { await viewModel.toggleBookmark(ranked.card) }
-                            }
-                            .buttonStyle(.bordered)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                Button(ranked.card.bookmarked ? "Saved" : "Save") {
+                                    Task { await viewModel.showFolderPicker(for: ranked.card) }
+                                }
+                                .buttonStyle(.bordered)
 
-                            Button("Show more") {
-                                Task { await viewModel.moreLike(ranked.card) }
-                            }
-                            .buttonStyle(.bordered)
+                                Button("Show more") {
+                                    Task { await viewModel.moreLike(ranked.card) }
+                                }
+                                .buttonStyle(.bordered)
 
-                            Button("Show less") {
-                                Task { await viewModel.lessLike(ranked.card) }
-                            }
-                            .buttonStyle(.bordered)
+                                Button("Show less") {
+                                    Task { await viewModel.lessLike(ranked.card) }
+                                }
+                                .buttonStyle(.bordered)
 
-                            Button("Folders") {
-                                Task { await viewModel.showFolderPicker(for: ranked.card) }
+                                if ranked.card.bookmarked {
+                                    Button("Unsave") {
+                                        Task { await viewModel.toggleBookmark(ranked.card) }
+                                    }
+                                    .buttonStyle(.bordered)
+                                }
                             }
-                            .buttonStyle(.bordered)
                         }
                     }
                     .padding(.vertical, 6)
@@ -105,6 +174,13 @@ struct FeedView: View {
                 }
             }
             .navigationTitle("Doompedia")
+            .onAppear {
+                guard !didInitialRefresh else { return }
+                didInitialRefresh = true
+                if viewModel.feed.isEmpty, viewModel.query.isEmpty {
+                    Task { await viewModel.refreshFeed() }
+                }
+            }
             .alert("Why this is shown", isPresented: $showWhyAlert) {
                 Button("Got it", role: .cancel) {}
             } message: {
@@ -120,7 +196,7 @@ struct FolderPickerSheet: View {
 
     var body: some View {
         NavigationStack {
-            List(viewModel.folders) { folder in
+            List(viewModel.folders.filter { $0.folderId != WikiRepository.defaultReadFolderID }) { folder in
                 Button {
                     viewModel.toggleFolderInPicker(folder.folderId)
                 } label: {
@@ -153,32 +229,44 @@ struct FolderPickerSheet: View {
 }
 
 private func buildTags(for card: ArticleCard) -> [String] {
-    let words = card.summary.split(whereSeparator: { $0.isWhitespace }).count
-    let readMins = max(1, Int(ceil(Double(words) / 220.0)))
-    let updatedYear: String? = {
-        let prefix = String(card.updatedAt.prefix(4))
-        return prefix.allSatisfy(\.isNumber) ? prefix : nil
-    }()
-    let qualityTag: String
-    switch card.qualityScore {
-    case 0.85...:
-        qualityTag = "High quality"
-    case 0.65...:
-        qualityTag = "Solid quality"
-    default:
-        qualityTag = "Fresh pick"
+    let text = "\(card.title) \(card.summary)".lowercased()
+    var tags = OrderedSet<String>()
+    tags.append(prettyTopic(card.topicKey))
+
+    let rules: [(String, [String])] = [
+        ("Biography", ["born", "died", "actor", "author", "scientist", "politician"]),
+        ("Science", ["physics", "chemistry", "biology", "mathematics", "astronomy"]),
+        ("Technology", ["software", "computer", "internet", "digital", "algorithm"]),
+        ("History", ["war", "empire", "century", "historical", "revolution"]),
+        ("Geography", ["city", "country", "region", "river", "mountain", "capital"]),
+        ("Politics", ["government", "election", "parliament", "policy", "minister"]),
+        ("Culture", ["music", "film", "literature", "art", "religion", "language"]),
+        ("Economics", ["economy", "finance", "market", "trade", "industry"]),
+        ("Health", ["medicine", "disease", "medical", "health", "hospital"]),
+    ]
+
+    for (tag, keywords) in rules where keywords.contains(where: { text.contains($0) }) {
+        tags.append(tag)
+    }
+    if card.title.localizedCaseInsensitiveContains("list of") { tags.append("Lists") }
+    if card.title.localizedCaseInsensitiveContains("university") { tags.append("Education") }
+    if card.bookmarked { tags.append("Saved") }
+
+    return Array(tags.prefix(6))
+}
+
+private struct OrderedSet<Element: Hashable> {
+    private var seen = Set<Element>()
+    private(set) var ordered: [Element] = []
+
+    mutating func append(_ value: Element) {
+        guard seen.insert(value).inserted else { return }
+        ordered.append(value)
     }
 
-    var tags: [String] = [
-        prettyTopic(card.topicKey),
-        card.lang.uppercased(),
-        "\(readMins)m read",
-        qualityTag,
-    ]
-    if let updatedYear { tags.append(updatedYear) }
-    if card.bookmarked { tags.append("Bookmarked") }
-    if card.isDisambiguation { tags.append("Disambiguation") }
-    return Array(tags.prefix(6))
+    func prefix(_ maxLength: Int) -> ArraySlice<Element> {
+        ordered.prefix(maxLength)
+    }
 }
 
 private func prettyTopic(_ raw: String) -> String {

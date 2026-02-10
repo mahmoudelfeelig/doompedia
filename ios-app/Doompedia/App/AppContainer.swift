@@ -5,6 +5,7 @@ final class AppContainer: ObservableObject {
     let repository: WikiRepository
     let updateService: PackUpdateService
     let settingsStore: SettingsStore
+    let wikipediaAPIClient: WikipediaAPIClient
 
     init() throws {
         let config = try RankingConfigLoader.load()
@@ -23,5 +24,6 @@ final class AppContainer: ObservableObject {
         self.repository = repository
         self.updateService = updateService
         self.settingsStore = SettingsStore()
+        self.wikipediaAPIClient = WikipediaAPIClient()
     }
 }

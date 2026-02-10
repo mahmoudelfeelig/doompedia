@@ -39,6 +39,7 @@ final class SettingsStore: ObservableObject {
         var decoded = try JSONDecoder().decode(UserSettings.self, from: data)
         decoded.language = decoded.language.trimmingCharacters(in: .whitespacesAndNewlines)
         decoded.manifestURL = decoded.manifestURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        decoded.customPacksJSON = decoded.customPacksJSON.trimmingCharacters(in: .whitespacesAndNewlines)
         settings = decoded
         persist(decoded)
         return decoded

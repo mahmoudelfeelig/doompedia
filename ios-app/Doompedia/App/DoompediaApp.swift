@@ -9,11 +9,35 @@ struct DoompediaApp: App {
             RootView(viewModel: viewModel)
                 .preferredColorScheme(viewModel.colorScheme)
                 .tint(appAccentColor)
+                .dynamicTypeSize(dynamicTypeSize)
+                .environment(\.legibilityWeight, viewModel.settings.highContrast ? .bold : nil)
+                .transaction { transaction in
+                    if viewModel.settings.reduceMotion {
+                        transaction.animation = nil
+                    }
+                }
         }
     }
 
     private var appAccentColor: Color {
         Color.fromHexForApp(viewModel.settings.accentHex) ?? .green
+    }
+
+    private var dynamicTypeSize: DynamicTypeSize {
+        switch viewModel.settings.fontScale {
+        case ..<0.9:
+            return .small
+        case 0.9 ..< 1.0:
+            return .medium
+        case 1.0 ..< 1.1:
+            return .large
+        case 1.1 ..< 1.2:
+            return .xLarge
+        case 1.2 ..< 1.3:
+            return .xxLarge
+        default:
+            return .xxxLarge
+        }
     }
 }
 

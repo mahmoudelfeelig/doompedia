@@ -22,6 +22,9 @@ struct SeedRow: Codable {
 }
 
 final class SQLiteStore {
+    static let bookmarksFolderID: Int64 = 1
+    static let readFolderID: Int64 = 2
+
     private var db: OpaquePointer?
     private let queue = DispatchQueue(label: "wiki.scroll.sqlite.queue")
 
@@ -247,8 +250,8 @@ final class SQLiteStore {
             if exists {
                 try execute(sql: "DELETE FROM bookmarks WHERE page_id = ?", bindings: [.int64(pageId)])
                 try execute(
-                    sql: "DELETE FROM article_folder_refs WHERE folder_id = 1 AND page_id = ?",
-                    bindings: [.int64(pageId)]
+                    sql: "DELETE FROM article_folder_refs WHERE folder_id = ? AND page_id = ?",
+                    bindings: [.int64(Self.bookmarksFolderID), .int64(pageId)]
                 )
                 return false
             }
@@ -258,8 +261,8 @@ final class SQLiteStore {
                 bindings: [.int64(pageId), .int64(now)]
             )
             try execute(
-                sql: "INSERT OR REPLACE INTO article_folder_refs (folder_id, page_id, created_at) VALUES (1, ?, ?)",
-                bindings: [.int64(pageId), .int64(now)]
+                sql: "INSERT OR REPLACE INTO article_folder_refs (folder_id, page_id, created_at) VALUES (?, ?, ?)",
+                bindings: [.int64(Self.bookmarksFolderID), .int64(pageId), .int64(now)]
             )
             return true
         }
@@ -281,11 +284,25 @@ final class SQLiteStore {
         try queue.sync {
             try ensureSaveDefaultsLocked()
             let sql = """
-                SELECT f.folder_id, f.name, f.is_default, COUNT(r.page_id) AS article_count
+                SELECT
+                    f.folder_id,
+                    f.name,
+                    f.is_default,
+                    CASE
+                        WHEN f.folder_id = \(Self.readFolderID)
+                            THEN COALESCE((SELECT COUNT(DISTINCT h.page_id) FROM history h), 0)
+                        ELSE COUNT(r.page_id)
+                    END AS article_count
                 FROM save_folders f
-                LEFT JOIN article_folder_refs r ON r.folder_id = f.folder_id
+                LEFT JOIN article_folder_refs r ON r.folder_id = f.folder_id AND f.folder_id != \(Self.readFolderID)
                 GROUP BY f.folder_id
-                ORDER BY f.is_default DESC, f.name ASC
+                ORDER BY
+                    CASE
+                        WHEN f.folder_id = \(Self.bookmarksFolderID) THEN 0
+                        WHEN f.folder_id = \(Self.readFolderID) THEN 1
+                        ELSE 2
+                    END,
+                    f.name ASC
                 """
             var statement: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK else {
@@ -355,17 +372,18 @@ final class SQLiteStore {
         try queue.sync {
             try ensureSaveDefaultsLocked()
             let now = Int64(Date().timeIntervalSince1970 * 1000)
+            let normalizedFolderIDs = folderIDs.filter { $0 != Self.readFolderID }
             try execute(sql: "BEGIN TRANSACTION")
             do {
                 try execute(sql: "DELETE FROM article_folder_refs WHERE page_id = ?", bindings: [.int64(pageID)])
-                for folderID in folderIDs {
+                for folderID in normalizedFolderIDs {
                     try execute(
                         sql: "INSERT OR REPLACE INTO article_folder_refs (folder_id, page_id, created_at) VALUES (?, ?, ?)",
                         bindings: [.int64(folderID), .int64(pageID), .int64(now)]
                     )
                 }
 
-                if folderIDs.contains(1) {
+                if normalizedFolderIDs.contains(Self.bookmarksFolderID) {
                     try execute(
                         sql: "INSERT OR REPLACE INTO bookmarks (page_id, created_at) VALUES (?, ?)",
                         bindings: [.int64(pageID), .int64(now)]
@@ -381,8 +399,36 @@ final class SQLiteStore {
         }
     }
 
-    func savedCards(folderID: Int64, limit: Int = 400) throws -> [ArticleCard] {
-        try queryCards(
+    func savedCards(
+        folderID: Int64,
+        language: String,
+        readSort: ReadSort = .newestFirst,
+        limit: Int = 400
+    ) throws -> [ArticleCard] {
+        if folderID == Self.readFolderID {
+            let order = readSort == .newestFirst ? "DESC" : "ASC"
+            let aggregate = readSort == .newestFirst ? "MAX" : "MIN"
+            return try queryCards(
+                sql: """
+                SELECT a.page_id, a.lang, a.title, a.normalized_title, a.summary, a.wiki_url,
+                       a.topic_key, a.quality_score, a.is_disambiguation, a.source_rev_id, a.updated_at,
+                       CASE WHEN b.page_id IS NULL THEN 0 ELSE 1 END AS bookmarked
+                FROM (
+                    SELECT page_id, \(aggregate)(opened_at) AS opened_at
+                    FROM history
+                    GROUP BY page_id
+                ) h
+                JOIN articles a ON a.page_id = h.page_id
+                LEFT JOIN bookmarks b ON b.page_id = a.page_id
+                WHERE a.lang = ?
+                ORDER BY h.opened_at \(order), a.page_id \(order)
+                LIMIT ?
+                """,
+                bindings: [.text(language), .int64(Int64(limit))]
+            )
+        }
+
+        return try queryCards(
             sql: """
             SELECT a.page_id, a.lang, a.title, a.normalized_title, a.summary, a.wiki_url,
                    a.topic_key, a.quality_score, a.is_disambiguation, a.source_rev_id, a.updated_at,
@@ -390,11 +436,11 @@ final class SQLiteStore {
             FROM article_folder_refs r
             JOIN articles a ON a.page_id = r.page_id
             LEFT JOIN bookmarks b ON b.page_id = a.page_id
-            WHERE r.folder_id = ?
+            WHERE r.folder_id = ? AND a.lang = ?
             ORDER BY r.created_at DESC, a.page_id DESC
             LIMIT ?
             """,
-            bindings: [.int64(folderID), .int64(Int64(limit))]
+            bindings: [.int64(folderID), .text(language), .int64(Int64(limit))]
         )
     }
 
@@ -418,7 +464,13 @@ final class SQLiteStore {
         try execute(
             sql: """
             INSERT OR IGNORE INTO save_folders (folder_id, name, is_default, created_at)
-            VALUES (1, 'Bookmarks', 1, 0)
+            VALUES (\(Self.bookmarksFolderID), 'Bookmarks', 1, 0)
+            """
+        )
+        try execute(
+            sql: """
+            INSERT OR IGNORE INTO save_folders (folder_id, name, is_default, created_at)
+            VALUES (\(Self.readFolderID), 'Read', 1, 0)
             """
         )
     }
@@ -507,8 +559,9 @@ final class SQLiteStore {
             "CREATE INDEX IF NOT EXISTS idx_history_opened_at ON history(opened_at)",
             "CREATE INDEX IF NOT EXISTS idx_article_folder_refs_folder ON article_folder_refs(folder_id)",
             "CREATE INDEX IF NOT EXISTS idx_article_folder_refs_page ON article_folder_refs(page_id)",
-            "INSERT OR IGNORE INTO save_folders (folder_id, name, is_default, created_at) VALUES (1, 'Bookmarks', 1, 0)",
-            "INSERT OR IGNORE INTO article_folder_refs (folder_id, page_id, created_at) SELECT 1, page_id, created_at FROM bookmarks",
+            "INSERT OR IGNORE INTO save_folders (folder_id, name, is_default, created_at) VALUES (\(Self.bookmarksFolderID), 'Bookmarks', 1, 0)",
+            "INSERT OR IGNORE INTO save_folders (folder_id, name, is_default, created_at) VALUES (\(Self.readFolderID), 'Read', 1, 0)",
+            "INSERT OR IGNORE INTO article_folder_refs (folder_id, page_id, created_at) SELECT \(Self.bookmarksFolderID), page_id, created_at FROM bookmarks",
         ]
 
         try queue.sync {

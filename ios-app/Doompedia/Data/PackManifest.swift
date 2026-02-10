@@ -6,10 +6,14 @@ struct PackManifest: Codable {
     let version: Int
     let createdAt: String
     let recordCount: Int
+    let description: String?
+    let packTags: [String]?
     let compression: String
     let shards: [PackShard]
     let delta: PackDelta?
     let topicDistribution: [String: Int]?
+    let entityDistribution: [String: Int]?
+    let sampleKeywords: [String]?
     let attribution: PackAttribution
 }
 

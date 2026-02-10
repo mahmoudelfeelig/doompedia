@@ -2,20 +2,38 @@ import SwiftUI
 
 struct RootView: View {
     @ObservedObject var viewModel: MainViewModel
+    @State private var selectedTab: AppTab = .explore
 
     var body: some View {
-        TabView {
+        TabView(selection: Binding(
+            get: { selectedTab },
+            set: { newValue in
+                if selectedTab == newValue, newValue == .explore {
+                    Task { await viewModel.refreshFeed() }
+                }
+                selectedTab = newValue
+            }
+        )) {
             FeedView(viewModel: viewModel)
+                .tag(AppTab.explore)
                 .tabItem {
-                    Label("Feed", systemImage: "rectangle.stack")
+                    Label("Explore", systemImage: "rectangle.stack")
                 }
 
             SavedView(viewModel: viewModel)
+                .tag(AppTab.saved)
                 .tabItem {
                     Label("Saved", systemImage: "bookmark")
                 }
 
+            PacksView(viewModel: viewModel)
+                .tag(AppTab.packs)
+                .tabItem {
+                    Label("Packs", systemImage: "square.and.arrow.down")
+                }
+
             SettingsView(viewModel: viewModel)
+                .tag(AppTab.settings)
                 .tabItem {
                     Label("Settings", systemImage: "gearshape")
                 }
@@ -35,4 +53,11 @@ struct RootView: View {
             Text(viewModel.message ?? "")
         }
     }
+}
+
+private enum AppTab: Hashable {
+    case explore
+    case saved
+    case packs
+    case settings
 }

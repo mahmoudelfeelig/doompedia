@@ -4,9 +4,8 @@ import UIKit
 struct SettingsView: View {
     @ObservedObject var viewModel: MainViewModel
 
-    @State private var manifestURLDraft: String = ""
-    @State private var accentHexDraft: String = ""
-    @State private var importDraft: String = ""
+    @State private var accentHexDraft = ""
+    @State private var importDraft = ""
 
     private let presets = [
         "#0B6E5B",
@@ -14,12 +13,36 @@ struct SettingsView: View {
         "#C44536",
         "#F59E0B",
         "#7E22CE",
-        "#1F2937",
+        "#EC4899",
     ]
 
     var body: some View {
         NavigationStack {
             Form {
+                Section("Mode") {
+                    Picker("Feed mode", selection: Binding(
+                        get: { viewModel.settings.feedMode },
+                        set: { viewModel.setFeedMode($0) }
+                    )) {
+                        ForEach(FeedMode.allCases, id: \.self) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Text(viewModel.settings.feedMode == .offline
+                         ? "OFFLINE uses downloaded packs and local cache only."
+                         : "ONLINE fetches live Wikipedia summaries and caches them locally.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                    if viewModel.effectiveFeedMode != viewModel.settings.feedMode {
+                        Text("No internet detected. Offline mode is active.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Section("Personalization") {
                     Picker("Level", selection: Binding(
                         get: { viewModel.settings.personalizationLevel },
@@ -52,10 +75,7 @@ struct SettingsView: View {
                                 Circle()
                                     .fill(Color.fromHex(hex) ?? .green)
                                     .frame(width: 24, height: 24)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color.primary.opacity(0.2), lineWidth: 1)
-                                    )
+                                    .overlay(Circle().stroke(Color.primary.opacity(0.2), lineWidth: 1))
                                     .onTapGesture {
                                         accentHexDraft = hex
                                         viewModel.setAccentHex(hex)
@@ -86,40 +106,36 @@ struct SettingsView: View {
                     .autocorrectionDisabled()
                 }
 
-                Section("Data and updates") {
-                    Toggle("Wi-Fi only", isOn: Binding(
+                Section("Accessibility") {
+                    HStack {
+                        Text("Font size")
+                        Spacer()
+                        Text("\(Int(viewModel.settings.fontScale * 100))%")
+                            .foregroundStyle(.secondary)
+                    }
+                    Slider(
+                        value: Binding(
+                            get: { viewModel.settings.fontScale },
+                            set: { viewModel.setFontScale($0) }
+                        ),
+                        in: 0.85 ... 1.35
+                    )
+
+                    Toggle("High contrast mode", isOn: Binding(
+                        get: { viewModel.settings.highContrast },
+                        set: { viewModel.setHighContrast($0) }
+                    ))
+                    Toggle("Reduce motion", isOn: Binding(
+                        get: { viewModel.settings.reduceMotion },
+                        set: { viewModel.setReduceMotion($0) }
+                    ))
+                }
+
+                Section("Downloads") {
+                    Toggle("Wi-Fi only downloads", isOn: Binding(
                         get: { viewModel.settings.wifiOnlyDownloads },
                         set: { viewModel.setWifiOnly($0) }
                     ))
-
-                    TextField("Manifest URL", text: Binding(
-                        get: { manifestURLDraft },
-                        set: { value in
-                            manifestURLDraft = value
-                            viewModel.setManifestURL(value)
-                        }
-                    ))
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-
-                    Button(viewModel.isUpdatingPack ? "Checking..." : "Check updates now") {
-                        Task { await viewModel.checkForUpdatesNow() }
-                    }
-                    .disabled(viewModel.isUpdatingPack)
-
-                    Text("Installed pack version: \(viewModel.settings.installedPackVersion)")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                    if !viewModel.settings.lastUpdateISO.isEmpty {
-                        Text("Last check: \(viewModel.settings.lastUpdateISO)")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    if !viewModel.settings.lastUpdateStatus.isEmpty {
-                        Text(viewModel.settings.lastUpdateStatus)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
                 }
 
                 Section("Settings backup") {
@@ -147,20 +163,12 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .onAppear {
-                if manifestURLDraft.isEmpty {
-                    manifestURLDraft = viewModel.settings.manifestURL
-                }
                 if accentHexDraft.isEmpty {
                     accentHexDraft = viewModel.settings.accentHex
                 }
             }
-            .onChange(of: viewModel.settings.manifestURL) { _, newValue in
-                if newValue != manifestURLDraft {
-                    manifestURLDraft = newValue
-                }
-            }
             .onChange(of: viewModel.settings.accentHex) { _, newValue in
-                if newValue != accentHexDraft {
+                if accentHexDraft != newValue {
                     accentHexDraft = newValue
                 }
             }

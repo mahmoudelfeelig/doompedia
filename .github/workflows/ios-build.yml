@@ -21,19 +21,37 @@ jobs:
       - name: Generate Xcode project
         working-directory: ios-app
         run: xcodegen generate
+      - name: Resolve simulator destination
+        run: |
+          set -euo pipefail
+          SIM_ID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ {print $2; exit}')"
+          if [ -z "${SIM_ID:-}" ]; then
+            echo "No available iPhone simulator found on runner"
+            exit 1
+          fi
+          echo "IOS_SIM_DEST=id=$SIM_ID" >> "$GITHUB_ENV"
       - name: Build iOS app (simulator, unsigned)
         working-directory: ios-app
         run: |
-          # Use a generic simulator destination so CI does not depend on one exact
-          # device name (e.g., "iPhone 15") being present on the runner image.
           xcodebuild \
             -project Doompedia.xcodeproj \
             -scheme Doompedia \
             -configuration Debug \
             -sdk iphonesimulator \
-            -destination "generic/platform=iOS Simulator" \
+            -destination "$IOS_SIM_DEST" \
             CODE_SIGNING_ALLOWED=NO \
             build
+      - name: Run iOS unit tests
+        working-directory: ios-app
+        run: |
+          xcodebuild \
+            -project Doompedia.xcodeproj \
+            -scheme Doompedia \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "$IOS_SIM_DEST" \
+            CODE_SIGNING_ALLOWED=NO \
+            test
       - name: Package simulator .app
         working-directory: ios-app
         run: |

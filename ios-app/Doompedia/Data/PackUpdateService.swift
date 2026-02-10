@@ -170,10 +170,14 @@ final class PackUpdateService {
             version: manifest.version,
             createdAt: manifest.createdAt,
             recordCount: manifest.recordCount,
+            description: manifest.description,
+            packTags: manifest.packTags,
             compression: manifest.compression,
             shards: localShards,
             delta: manifest.delta,
             topicDistribution: manifest.topicDistribution,
+            entityDistribution: manifest.entityDistribution,
+            sampleKeywords: manifest.sampleKeywords,
             attribution: manifest.attribution
         )
 

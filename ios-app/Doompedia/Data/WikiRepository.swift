@@ -5,6 +5,7 @@ final class WikiRepository {
     private let config: RankingConfig
     private let ranker: FeedRanker
     static let defaultBookmarksFolderID: Int64 = 1
+    static let defaultReadFolderID: Int64 = 2
 
     init(store: SQLiteStore, config: RankingConfig) {
         self.store = store
@@ -19,6 +20,23 @@ final class WikiRepository {
 
     func loadFeed(language: String, level: PersonalizationLevel, limit: Int = 50) throws -> [RankedCard] {
         let candidates = try store.feedCandidates(language: language, limit: 250)
+        let affinities = try store.topicAffinities(language: language)
+        let recentTopics = try store.recentTopics(limit: config.guardrails.windowSize)
+        return ranker.rank(
+            candidates: candidates,
+            topicAffinity: affinities,
+            recentlySeenTopics: recentTopics,
+            level: level,
+            limit: limit
+        )
+    }
+
+    func rankCandidates(
+        language: String,
+        level: PersonalizationLevel,
+        candidates: [ArticleCard],
+        limit: Int = 50
+    ) throws -> [RankedCard] {
         let affinities = try store.topicAffinities(language: language)
         let recentTopics = try store.recentTopics(limit: config.guardrails.windowSize)
         return ranker.rank(
@@ -66,6 +84,11 @@ final class WikiRepository {
         }
 
         return Array(ordered.prefix(maxResults))
+    }
+
+    func cacheOnlineArticles(_ rows: [SeedRow]) throws {
+        guard !rows.isEmpty else { return }
+        try store.upsertSeedRows(rows)
     }
 
     func recordOpen(card: ArticleCard, level: PersonalizationLevel) throws {
@@ -120,8 +143,70 @@ final class WikiRepository {
         try store.setFoldersForArticle(pageID: pageID, folderIDs: folderIDs)
     }
 
-    func savedCards(folderID: Int64) throws -> [ArticleCard] {
-        try store.savedCards(folderID: folderID)
+    func savedCards(folderID: Int64, language: String, readSort: ReadSort = .newestFirst) throws -> [ArticleCard] {
+        try store.savedCards(folderID: folderID, language: language, readSort: readSort)
+    }
+
+    func exportFolders(selectedFolderIDs: Set<Int64>? = nil, language: String) throws -> String {
+        let folders = try saveFolders()
+            .filter { $0.folderId != Self.defaultReadFolderID }
+            .filter { selectedFolderIDs == nil || selectedFolderIDs?.contains($0.folderId) == true }
+
+        let payloadFolders: [[String: Any]] = try folders.map { folder in
+            let cards = try savedCards(folderID: folder.folderId, language: language)
+            return [
+                "folderId": folder.folderId,
+                "name": folder.name,
+                "isDefault": folder.isDefault,
+                "articlePageIds": cards.map(\.pageId),
+            ]
+        }
+
+        let root: [String: Any] = [
+            "version": 1,
+            "format": "doompedia-folder-export",
+            "exportedAt": ISO8601DateFormatter().string(from: Date()),
+            "folders": payloadFolders,
+        ]
+        let data = try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys])
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    func importFolders(payload: String) throws -> Int {
+        guard
+            let data = payload.data(using: .utf8),
+            let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let folders = root["folders"] as? [[String: Any]]
+        else {
+            throw NSError(domain: "Doompedia", code: 801, userInfo: [NSLocalizedDescriptionKey: "Invalid folder JSON"])
+        }
+
+        var linked = 0
+        for folder in folders {
+            guard let name = (folder["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !name.isEmpty else { continue }
+
+            let targetFolderID: Int64
+            if name.caseInsensitiveCompare("Bookmarks") == .orderedSame {
+                targetFolderID = Self.defaultBookmarksFolderID
+            } else if name.caseInsensitiveCompare("Read") == .orderedSame {
+                targetFolderID = Self.defaultReadFolderID
+            } else {
+                _ = try createFolder(name: name)
+                let resolved = try saveFolders().first { $0.name.caseInsensitiveCompare(name) == .orderedSame }?.folderId
+                guard let resolved else { continue }
+                targetFolderID = resolved
+            }
+
+            let ids = (folder["articlePageIds"] as? [NSNumber])?.map { $0.int64Value } ?? []
+            for pageID in ids {
+                let existing = try selectedFolderIDs(pageID: pageID)
+                let merged = existing.union([targetFolderID])
+                try setFoldersForArticle(pageID: pageID, folderIDs: merged)
+                linked += 1
+            }
+        }
+        return linked
     }
 
     private func updateAffinity(language: String, topic: String, delta: Double) throws {

@@ -20,3 +20,15 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: Doompedia
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.reference
         GENERATE_INFOPLIST_FILE: YES
+
+  DoompediaTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - DoompediaTests
+    dependencies:
+      - target: Doompedia
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.feelbachelor.doompedia.ios.tests
