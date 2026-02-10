@@ -54,9 +54,10 @@ fun SettingsScreen(
     var hue by remember { mutableFloatStateOf(0f) }
     var saturation by remember { mutableFloatStateOf(0f) }
     var value by remember { mutableFloatStateOf(0f) }
+    val fallbackPrimary = MaterialTheme.colorScheme.primary
 
-    LaunchedEffect(settings.accentHex) {
-        val color = parseHexColor(settings.accentHex, MaterialTheme.colorScheme.primary)
+    LaunchedEffect(settings.accentHex, fallbackPrimary) {
+        val color = parseHexColor(settings.accentHex, fallbackPrimary)
         val hsv = FloatArray(3)
         AndroidColor.colorToHSV(color.toArgb(), hsv)
         hue = hsv[0]
