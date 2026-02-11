@@ -4,6 +4,8 @@ import argparse
 import gzip
 import hashlib
 import json
+import sys
+import time
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -38,7 +40,17 @@ def parse_args() -> argparse.Namespace:
         default="none",
         help="Shard compression format",
     )
+    parser.add_argument(
+        "--progress-every",
+        type=int,
+        default=50_000,
+        help="Print progress every N processed records (0 disables progress logs)",
+    )
     return parser.parse_args()
+
+
+def _log(message: str) -> None:
+    print(f"[build_pack] {message}", file=sys.stderr, flush=True)
 
 
 def iter_cards(path: Path, language: str):
@@ -122,6 +134,13 @@ def build_pack(args: argparse.Namespace) -> dict[str, object]:
     entity_counts = defaultdict(int)
     keyword_counts = defaultdict(int)
     processed = 0
+    start = time.monotonic()
+    next_progress = args.progress_every if args.progress_every > 0 else 0
+
+    _log(
+        f"Building pack {args.pack_id} from {input_path} "
+        f"(max-records={args.max_records:,}, shard-size={args.shard_size:,}, compression={args.compression})"
+    )
 
     for card in iter_cards(input_path, args.language):
         if processed >= args.max_records:
@@ -134,24 +153,37 @@ def build_pack(args: argparse.Namespace) -> dict[str, object]:
         shard_buffer.append(card)
 
         if len(shard_buffer) >= args.shard_size:
-            shard_metas.append(
-                write_shard(
-                    shards_dir=shards_dir,
-                    shard_index=len(shard_metas) + 1,
-                    records=shard_buffer,
-                    compression=args.compression,
-                )
-            )
-            shard_buffer = []
-
-    if shard_buffer:
-        shard_metas.append(
-            write_shard(
+            meta = write_shard(
                 shards_dir=shards_dir,
                 shard_index=len(shard_metas) + 1,
                 records=shard_buffer,
                 compression=args.compression,
             )
+            shard_metas.append(meta)
+            elapsed = time.monotonic() - start
+            _log(
+                f"Wrote shard {meta.id} ({meta.records:,} records, {meta.bytes:,} bytes) "
+                f"(processed: {processed:,}, elapsed: {elapsed:.1f}s)"
+            )
+            shard_buffer = []
+
+        if next_progress and processed >= next_progress:
+            elapsed = time.monotonic() - start
+            _log(f"Processed {processed:,} records (elapsed: {elapsed:.1f}s)")
+            next_progress += args.progress_every
+
+    if shard_buffer:
+        meta = write_shard(
+            shards_dir=shards_dir,
+            shard_index=len(shard_metas) + 1,
+            records=shard_buffer,
+            compression=args.compression,
+        )
+        shard_metas.append(meta)
+        elapsed = time.monotonic() - start
+        _log(
+            f"Wrote shard {meta.id} ({meta.records:,} records, {meta.bytes:,} bytes) "
+            f"(processed: {processed:,}, elapsed: {elapsed:.1f}s)"
         )
 
     top_topics = sorted(topic_counts.items(), key=lambda item: item[1], reverse=True)
@@ -194,6 +226,12 @@ def build_pack(args: argparse.Namespace) -> dict[str, object]:
 
     checksum_lines = [f"{meta.sha256}  {meta.path}" for meta in shard_metas]
     (output_dir / "checksums.txt").write_text("\n".join(checksum_lines) + "\n", encoding="utf-8")
+
+    elapsed = time.monotonic() - start
+    _log(
+        f"Pack build complete: {processed:,} records, {len(shard_metas)} shards "
+        f"(elapsed: {elapsed:.1f}s)"
+    )
 
     return manifest
 

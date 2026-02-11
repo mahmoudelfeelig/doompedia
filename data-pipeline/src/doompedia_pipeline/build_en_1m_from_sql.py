@@ -4,6 +4,8 @@ import argparse
 import gzip
 import json
 import re
+import sys
+import time
 import unicodedata
 from pathlib import Path
 from urllib.parse import quote
@@ -25,11 +27,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--language", default="en")
     parser.add_argument("--target", type=int, default=1_000_000)
     parser.add_argument("--oversample", type=float, default=2.2)
+    parser.add_argument(
+        "--progress-every",
+        type=int,
+        default=50_000,
+        help="Print progress every N matched records (0 disables progress logs)",
+    )
     return parser.parse_args()
 
 
 INSERT_RE = re.compile(r"^INSERT INTO `(?P<table>[^`]+)` VALUES (?P<values>.+);$")
 WORD_RE = re.compile(r"[A-Za-z][A-Za-z-]{2,}")
+
+
+def _log(message: str) -> None:
+    print(f"[build_en_1m_from_sql] {message}", file=sys.stderr, flush=True)
 
 
 def _normalize_title(title: str) -> str:
@@ -177,9 +189,15 @@ def collect_candidate_pages(
     page_sql_gz: Path,
     target: int,
     oversample: float,
+    progress_every: int = 0,
 ) -> list[tuple[int, str]]:
     desired = max(target, int(target * oversample))
     candidates: list[tuple[int, str]] = []
+    scanned_rows = 0
+    start = time.monotonic()
+    next_progress = progress_every if progress_every > 0 else 0
+
+    _log(f"Collecting candidate pages from {page_sql_gz} (target={desired:,})")
 
     with gzip.open(page_sql_gz, "rt", encoding="utf-8", errors="replace") as fh:
         for line in fh:
@@ -188,7 +206,10 @@ def collect_candidate_pages(
             if not match or match.group("table") != "page":
                 continue
 
-            for row in _parse_sql_values(match.group("values")):
+            rows = _parse_sql_values(match.group("values"))
+            scanned_rows += len(rows)
+
+            for row in rows:
                 # page table columns:
                 # 0 page_id, 1 page_namespace, 2 page_title, 3 restrictions, 4 is_redirect, ...
                 if len(row) < 5:
@@ -208,19 +229,46 @@ def collect_candidate_pages(
 
                 title = title_raw
                 candidates.append((page_id, title))
+                if next_progress and len(candidates) >= next_progress:
+                    elapsed = time.monotonic() - start
+                    _log(
+                        "Candidates: "
+                        f"{len(candidates):,}/{desired:,} "
+                        f"(rows scanned: {scanned_rows:,}, elapsed: {elapsed:.1f}s)"
+                    )
+                    next_progress += progress_every
                 if len(candidates) >= desired:
+                    elapsed = time.monotonic() - start
+                    _log(
+                        f"Candidate collection complete: {len(candidates):,} pages "
+                        f"(rows scanned: {scanned_rows:,}, elapsed: {elapsed:.1f}s)"
+                    )
                     return candidates
 
+    elapsed = time.monotonic() - start
+    _log(
+        f"Candidate collection finished at EOF: {len(candidates):,} pages "
+        f"(rows scanned: {scanned_rows:,}, elapsed: {elapsed:.1f}s)"
+    )
     return candidates
 
 
 def collect_shortdescs(
     page_props_sql_gz: Path,
     candidate_ids: set[int],
+    progress_every: int = 0,
 ) -> dict[int, str]:
     shortdesc_by_id: dict[int, str] = {}
     if not candidate_ids:
         return shortdesc_by_id
+    scanned_rows = 0
+    start = time.monotonic()
+    next_progress = progress_every if progress_every > 0 else 0
+
+    _log(
+        f"Collecting short descriptions from {page_props_sql_gz} "
+        f"for {len(candidate_ids):,} candidate pages"
+    )
 
     with gzip.open(page_props_sql_gz, "rt", encoding="utf-8", errors="replace") as fh:
         for line in fh:
@@ -229,7 +277,10 @@ def collect_shortdescs(
             if not match or match.group("table") != "page_props":
                 continue
 
-            for row in _parse_sql_values(match.group("values")):
+            rows = _parse_sql_values(match.group("values"))
+            scanned_rows += len(rows)
+
+            for row in rows:
                 # page_props columns:
                 # 0 pp_page, 1 pp_propname, 2 pp_value, 3 pp_sortkey
                 if len(row) < 3:
@@ -247,7 +298,30 @@ def collect_shortdescs(
                     continue
                 if page_id not in shortdesc_by_id:
                     shortdesc_by_id[page_id] = value
+                    if next_progress and len(shortdesc_by_id) >= next_progress:
+                        elapsed = time.monotonic() - start
+                        _log(
+                            "Short descriptions matched: "
+                            f"{len(shortdesc_by_id):,}/{len(candidate_ids):,} "
+                            f"(rows scanned: {scanned_rows:,}, elapsed: {elapsed:.1f}s)"
+                        )
+                        next_progress += progress_every
 
+                if len(shortdesc_by_id) >= len(candidate_ids):
+                    elapsed = time.monotonic() - start
+                    _log(
+                        "Short description collection complete: "
+                        f"{len(shortdesc_by_id):,} "
+                        f"(rows scanned: {scanned_rows:,}, elapsed: {elapsed:.1f}s)"
+                    )
+                    return shortdesc_by_id
+
+    elapsed = time.monotonic() - start
+    _log(
+        "Short description collection finished at EOF: "
+        f"{len(shortdesc_by_id):,} "
+        f"(rows scanned: {scanned_rows:,}, elapsed: {elapsed:.1f}s)"
+    )
     return shortdesc_by_id
 
 
@@ -276,13 +350,30 @@ def build_cards(
     language: str,
     target: int,
     oversample: float,
+    progress_every: int,
 ) -> dict[str, int]:
-    candidates = collect_candidate_pages(page_sql_gz=page_sql_gz, target=target, oversample=oversample)
+    candidates = collect_candidate_pages(
+        page_sql_gz=page_sql_gz,
+        target=target,
+        oversample=oversample,
+        progress_every=progress_every,
+    )
     candidate_ids = {page_id for page_id, _ in candidates}
-    shortdescs = collect_shortdescs(page_props_sql_gz=page_props_sql_gz, candidate_ids=candidate_ids)
+    shortdescs = collect_shortdescs(
+        page_props_sql_gz=page_props_sql_gz,
+        candidate_ids=candidate_ids,
+        progress_every=progress_every,
+    )
 
     output_ndjson.parent.mkdir(parents=True, exist_ok=True)
     written = 0
+    start = time.monotonic()
+    next_progress = progress_every if progress_every > 0 else 0
+
+    _log(
+        f"Writing cards to {output_ndjson} "
+        f"(candidates: {len(candidates):,}, short descriptions: {len(shortdescs):,})"
+    )
 
     with output_ndjson.open("w", encoding="utf-8") as out:
         for page_id, title in candidates:
@@ -314,8 +405,21 @@ def build_cards(
             out.write(json.dumps(record, ensure_ascii=False))
             out.write("\n")
             written += 1
+            if next_progress and written >= next_progress:
+                elapsed = time.monotonic() - start
+                _log(
+                    f"Cards written: {written:,}/{target:,} "
+                    f"(elapsed: {elapsed:.1f}s)"
+                )
+                next_progress += progress_every
             if written >= target:
                 break
+
+    elapsed = time.monotonic() - start
+    _log(
+        f"Card writing complete: {written:,} records "
+        f"(elapsed: {elapsed:.1f}s)"
+    )
 
     return {
         "candidatePages": len(candidates),
@@ -334,6 +438,7 @@ def main() -> None:
         language=args.language,
         target=args.target,
         oversample=args.oversample,
+        progress_every=args.progress_every,
     )
     print(json.dumps(summary, indent=2))
 

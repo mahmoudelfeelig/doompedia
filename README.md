@@ -46,9 +46,16 @@ Use `scripts/build_en_1m_pack.sh` to generate a real `en-core-1m` pack from Wiki
 To build an "all available EN summaries" pack (very large), use:
 - `scripts/build_en_all_pack.sh`
 
+To build additional real focused packs from the current core source:
+- `scripts/build_en_focus_packs.sh` (creates `en-history-250k` and `en-science-250k`)
+
+To build real thematic split packs from an existing large source manifest:
+- `scripts/build_en_thematic_packs.sh` (creates `en-stem-500k`, `en-history-politics-500k`, `en-biography-500k`, `en-geography-500k`, `en-culture-500k`)
+
 ## Publish/deploy pack
 - Prepare hosted pack layout: `scripts/publish_pack.sh`
 - Deploy to S3-compatible storage: `scripts/deploy_pack_to_s3.sh`
+- Deploy directly to Cloudflare R2: `scripts/deploy_pack_to_r2.sh`
 - See full guide: `docs/DEPLOYMENT.md`
 
 ## iOS builds from Windows
