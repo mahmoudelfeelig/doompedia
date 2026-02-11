@@ -47,7 +47,7 @@ fun SavedScreen(
     onImportFolders: (String) -> Unit,
     onOpenCard: (ArticleCard) -> Unit,
     onToggleBookmark: (ArticleCard) -> Unit,
-    onShowFolderPicker: (ArticleCard) -> Unit,
+    onUnsaveFromSelectedFolder: (ArticleCard) -> Unit,
 ) {
     var newFolderName by remember { mutableStateOf("") }
     var importDraft by remember { mutableStateOf("") }
@@ -205,15 +205,24 @@ fun SavedScreen(
                         text = card.summary,
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (selectedFolder?.folderId == WikiRepository.DEFAULT_BOOKMARKS_FOLDER_ID) {
-                            OutlinedButton(onClick = { onToggleBookmark(card) }) {
-                                Text(if (card.bookmarked) "Unsave" else "Save")
-                            }
-                        }
-                        if (!isReadFolder) {
-                            OutlinedButton(onClick = { onShowFolderPicker(card) }) {
-                                Text("Folders")
+                    if (!isReadFolder) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = {
+                                    if (selectedFolder?.folderId == WikiRepository.DEFAULT_BOOKMARKS_FOLDER_ID) {
+                                        onToggleBookmark(card)
+                                    } else {
+                                        onUnsaveFromSelectedFolder(card)
+                                    }
+                                }
+                            ) {
+                                Text(
+                                    if (selectedFolder?.folderId == WikiRepository.DEFAULT_BOOKMARKS_FOLDER_ID) {
+                                        if (card.bookmarked) "Unsave" else "Save"
+                                    } else {
+                                        "Unsave"
+                                    }
+                                )
                             }
                         }
                     }

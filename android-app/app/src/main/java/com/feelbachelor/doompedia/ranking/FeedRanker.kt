@@ -1,6 +1,7 @@
 package com.feelbachelor.doompedia.ranking
 
 import com.feelbachelor.doompedia.domain.ArticleCard
+import com.feelbachelor.doompedia.domain.CardKeywords
 import com.feelbachelor.doompedia.domain.PersonalizationLevel
 import com.feelbachelor.doompedia.domain.RankedCard
 import kotlin.math.max
@@ -8,8 +9,14 @@ import kotlin.math.max
 class FeedRanker(
     private val config: RankingConfig,
 ) {
+    private data class TopicDescriptor(
+        val primaryTopic: String,
+        val preferenceKeys: List<String>,
+    )
+
     private data class BaseScore(
         val card: ArticleCard,
+        val primaryTopic: String,
         val interest: Double,
         val novelty: Double,
         val quality: Double,
@@ -38,12 +45,18 @@ class FeedRanker(
 
         val rankedBase = candidates
             .map { card ->
-                val interest = (topicAffinity[card.topicKey] ?: 0.0) * config.weights.interest * levelFactor
-                val novelty = noveltyScore(card, recentlySeenTopics)
+                val descriptor = describeTopics(card)
+                val interest = interestScore(
+                    topicAffinity = topicAffinity,
+                    descriptor = descriptor,
+                    levelFactor = levelFactor,
+                )
+                val novelty = noveltyScore(descriptor.primaryTopic, recentlySeenTopics)
                 val quality = card.qualityScore * config.weights.quality
-                val repetition = repetitionPenalty(card.topicKey, recentlySeenTopics)
+                val repetition = repetitionPenalty(descriptor.primaryTopic, recentlySeenTopics)
                 BaseScore(
                     card = card,
+                    primaryTopic = descriptor.primaryTopic,
                     interest = interest,
                     novelty = novelty,
                     quality = quality,
@@ -61,7 +74,7 @@ class FeedRanker(
         for (base in rankedBase) {
             if (result.size >= limit) break
 
-            val topic = base.card.topicKey
+            val topic = base.primaryTopic
             if (selectedTopics.count { it == topic } >= config.guardrails.maxSameTopicInWindow) continue
             if (wouldViolateDistinctTopicGuardrail(selectedTopics, topic)) continue
 
@@ -89,30 +102,72 @@ class FeedRanker(
             for (base in rankedBase) {
                 if (result.size >= limit) break
                 if (!selectedIds.add(base.card.pageId)) continue
-                if (selectedTopics.count { it == base.card.topicKey } >= config.guardrails.maxSameTopicInWindow) continue
-                if (wouldViolateDistinctTopicGuardrail(selectedTopics, base.card.topicKey)) continue
+                if (selectedTopics.count { it == base.primaryTopic } >= config.guardrails.maxSameTopicInWindow) continue
+                if (wouldViolateDistinctTopicGuardrail(selectedTopics, base.primaryTopic)) continue
 
-                val diversity = diversityScore(base.card.topicKey, selectedTopics)
+                val diversity = diversityScore(base.primaryTopic, selectedTopics)
                 val score = base.score + diversity
-                val isExploration = topAffinityTopics.isNotEmpty() && base.card.topicKey !in topAffinityTopics
+                val isExploration = topAffinityTopics.isNotEmpty() && base.primaryTopic !in topAffinityTopics
                 val why = buildWhy(
-                    topic = base.card.topicKey,
+                    topic = base.primaryTopic,
                     interest = base.interest,
                     novelty = base.novelty,
                     diversity = diversity,
                     isExploration = isExploration,
                 )
                 result += RankedCard(card = base.card, score = score, why = why)
-                selectedTopics += base.card.topicKey
+                selectedTopics += base.primaryTopic
             }
         }
 
         return result.take(limit)
     }
 
-    private fun noveltyScore(card: ArticleCard, recentTopics: List<String>): Double {
+    private fun describeTopics(card: ArticleCard): TopicDescriptor {
+        val extracted = CardKeywords.preferenceKeys(
+            title = card.title,
+            summary = card.summary,
+            topicKey = card.topicKey,
+            maxKeys = 10,
+        )
+        val explicitTopic = normalizeTopicKey(card.topicKey)
+        val hasExplicitTopic = explicitTopic.isNotBlank() && explicitTopic !in setOf("general", "unknown", "other")
+        val keys = buildList {
+            if (hasExplicitTopic) add(explicitTopic)
+            addAll(extracted)
+        }.distinct().take(10)
+        val inferredPrimary = CardKeywords.primaryTopic(
+            title = card.title,
+            summary = card.summary,
+            topicKey = card.topicKey,
+        )
+        val primary = if (hasExplicitTopic) explicitTopic else inferredPrimary
+        return TopicDescriptor(primaryTopic = primary, preferenceKeys = keys)
+    }
+
+    private fun normalizeTopicKey(raw: String): String {
+        return raw.trim()
+            .lowercase()
+            .replace('_', '-')
+            .replace(Regex("\\s+"), "-")
+    }
+
+    private fun interestScore(
+        topicAffinity: Map<String, Double>,
+        descriptor: TopicDescriptor,
+        levelFactor: Double,
+    ): Double {
+        val values = descriptor.preferenceKeys.map { key -> topicAffinity[key] ?: 0.0 }
+        if (values.isEmpty()) return 0.0
+        val maxSignal = values.maxOrNull() ?: 0.0
+        val avgSignal = values.average()
+        val blended = (maxSignal * 0.7) + (avgSignal * 0.3)
+        return blended * config.weights.interest * levelFactor
+    }
+
+    private fun noveltyScore(primaryTopic: String, recentTopics: List<String>): Double {
         if (recentTopics.isEmpty()) return config.weights.novelty
-        return if (card.topicKey !in recentTopics.take(config.guardrails.cooldownCards)) {
+        return if (primaryTopic !in recentTopics.take(config.guardrails.cooldownCards)) {
             config.weights.novelty
         } else {
             config.weights.novelty * 0.1

@@ -35,9 +35,13 @@ class PackUpdateWorker(
             manifestUrl = settings.manifestUrl,
             wifiOnly = settings.wifiOnlyDownloads,
             installedVersion = settings.installedPackVersion,
+            installedSignature = settings.installedPackSignature,
         )
 
-        app.container.preferences.setInstalledPackVersion(outcome.installedVersion)
+        app.container.preferences.setInstalledPackInfo(
+            version = outcome.installedVersion,
+            signature = outcome.installedSignature,
+        )
         app.container.preferences.setLastUpdate(
             timestampIso = nowIso(),
             status = outcome.message,

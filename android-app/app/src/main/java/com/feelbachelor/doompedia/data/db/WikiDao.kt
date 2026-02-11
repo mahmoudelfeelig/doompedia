@@ -11,6 +11,9 @@ interface WikiDao {
     @Query("SELECT COUNT(*) FROM articles")
     suspend fun articleCount(): Int
 
+    @Query("SELECT COUNT(*) FROM articles WHERE lang = :lang AND isDisambiguation = 0")
+    suspend fun articleCount(lang: String): Int
+
     @Upsert
     suspend fun upsertArticles(rows: List<ArticleEntity>)
 
@@ -36,6 +39,20 @@ interface WikiDao {
         """
     )
     suspend fun feedCandidates(lang: String, limit: Int): List<ArticleWithBookmark>
+
+    @Query(
+        """
+        SELECT a.pageId, a.lang, a.title, a.normalizedTitle, a.summary, a.wikiUrl,
+               a.topicKey, a.qualityScore, a.isDisambiguation, a.sourceRevId, a.updatedAt,
+               CASE WHEN b.pageId IS NULL THEN 0 ELSE 1 END AS bookmarked
+        FROM articles a
+        LEFT JOIN bookmarks b ON b.pageId = a.pageId
+        WHERE a.lang = :lang AND a.isDisambiguation = 0
+        ORDER BY a.qualityScore DESC, a.pageId ASC
+        LIMIT :limit OFFSET :offset
+        """
+    )
+    suspend fun feedCandidatesPage(lang: String, limit: Int, offset: Int): List<ArticleWithBookmark>
 
     @Query(
         """
@@ -106,7 +123,7 @@ interface WikiDao {
     suspend fun upsertBookmark(row: BookmarkEntity)
 
     @Query("DELETE FROM bookmarks WHERE pageId = :pageId")
-    suspend fun deleteBookmark(pageId: Long)
+    suspend fun deleteBookmark(pageId: Long): Int
 
     @Query("SELECT EXISTS(SELECT 1 FROM bookmarks WHERE pageId = :pageId)")
     suspend fun isBookmarked(pageId: Long): Boolean
@@ -139,6 +156,9 @@ interface WikiDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertFolder(row: SaveFolderEntity): Long
 
+    @Upsert
+    suspend fun upsertFolder(row: SaveFolderEntity)
+
     @Query(
         """
         SELECT f.folderId AS folderId, f.name AS name, f.isDefault AS isDefault, COUNT(r.pageId) AS articleCount
@@ -167,17 +187,23 @@ interface WikiDao {
     @Query("DELETE FROM save_folders WHERE folderId = :folderId AND isDefault = 0")
     suspend fun deleteFolder(folderId: Long): Int
 
+    @Query("DELETE FROM save_folders WHERE folderId = :folderId")
+    suspend fun forceDeleteFolder(folderId: Long): Int
+
     @Query("SELECT folderId FROM article_folder_refs WHERE pageId = :pageId")
     suspend fun folderIdsForArticle(pageId: Long): List<Long>
 
     @Query("DELETE FROM article_folder_refs WHERE pageId = :pageId")
     suspend fun clearFolderRefsForArticle(pageId: Long)
 
+    @Query("DELETE FROM article_folder_refs WHERE folderId = :folderId")
+    suspend fun clearFolderRefsForFolder(folderId: Long)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertFolderRefs(rows: List<ArticleFolderRefEntity>)
 
     @Query("DELETE FROM article_folder_refs WHERE folderId = :folderId AND pageId = :pageId")
-    suspend fun deleteFolderRef(folderId: Long, pageId: Long)
+    suspend fun deleteFolderRef(folderId: Long, pageId: Long): Int
 
     @Query(
         """

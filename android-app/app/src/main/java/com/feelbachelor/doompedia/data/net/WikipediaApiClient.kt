@@ -25,14 +25,47 @@ class WikipediaApiClient {
         val seen = mutableSetOf<Long>()
         val results = mutableListOf<OnlineArticle>()
         val nowIso = java.time.Instant.now().toString()
+        val cacheBustSeed = System.currentTimeMillis()
 
-        repeat(cappedCount * 2) {
+        repeat(cappedCount * 4) { attempt ->
             if (results.size >= cappedCount) return@repeat
-            val endpoint = "https://$normalizedLang.wikipedia.org/api/rest_v1/page/random/summary"
-            val payload = fetchJson(endpoint)
+            val endpoint = "https://$normalizedLang.wikipedia.org/api/rest_v1/page/random/summary?cb=${cacheBustSeed + attempt}"
+            val payload = runCatching { fetchJson(endpoint) }.getOrNull() ?: return@repeat
             val parsed = parseRandomSummary(payload, normalizedLang, nowIso) ?: return@repeat
             if (!seen.add(parsed.pageId)) return@repeat
             results += parsed
+        }
+
+        if (results.isNotEmpty()) {
+            return results
+        }
+
+        // Fallback for environments where REST random summary endpoint is blocked/unreliable.
+        val queryFallback = runCatching {
+            fetchRandomSummariesViaQueryApi(
+                language = normalizedLang,
+                count = cappedCount,
+                nowIso = nowIso,
+            )
+        }.getOrDefault(emptyList())
+
+        queryFallback.forEach { article ->
+            if (results.size >= cappedCount) return@forEach
+            if (seen.add(article.pageId)) {
+                results += article
+            }
+        }
+
+        if (results.isEmpty()) {
+            val seededFallback = runCatching {
+                fetchSeededFallback(language = normalizedLang, count = cappedCount)
+            }.getOrDefault(emptyList())
+            seededFallback.forEach { article ->
+                if (results.size >= cappedCount) return@forEach
+                if (seen.add(article.pageId)) {
+                    results += article
+                }
+            }
         }
         return results
     }
@@ -81,8 +114,9 @@ class WikipediaApiClient {
     private fun parseRandomSummary(payload: String, language: String, nowIso: String): OnlineArticle? {
         val json = JSONObject(payload)
         val title = json.optString("title").trim()
+        if (title.isBlank()) return null
         val summary = json.optString("extract").trim()
-        if (title.isBlank() || summary.isBlank()) return null
+            .ifBlank { "$title article on Wikipedia" }
 
         val pageId = json.optLong("pageid", -1L).takeIf { it > 0L }
             ?: stableSyntheticPageId(language = language, title = title)
@@ -108,6 +142,81 @@ class WikipediaApiClient {
             sourceRevId = null,
             updatedAt = nowIso,
         )
+    }
+
+    private fun fetchRandomSummariesViaQueryApi(
+        language: String,
+        count: Int,
+        nowIso: String,
+    ): List<OnlineArticle> {
+        val endpoint = "https://$language.wikipedia.org/w/api.php" +
+            "?action=query&format=json&generator=random&grnnamespace=0&grnlimit=${count.coerceIn(1, 50)}" +
+            "&prop=extracts|info&inprop=url&explaintext=1&exintro=1&exchars=420"
+
+        val root = JSONObject(fetchJson(endpoint))
+        val pages = root.optJSONObject("query")?.optJSONObject("pages") ?: JSONObject()
+        val keys = pages.keys()
+        val rows = mutableListOf<OnlineArticle>()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val page = pages.optJSONObject(key) ?: continue
+            val pageId = page.optLong("pageid", -1L)
+            if (pageId <= 0L) continue
+            val title = page.optString("title").trim()
+            if (title.isBlank()) continue
+            val summary = page.optString("extract").trim().ifBlank { "$title article on Wikipedia" }
+            val wikiUrl = page.optString("fullurl").trim().ifBlank {
+                "https://$language.wikipedia.org/wiki/" + URLEncoder.encode(
+                    title.replace(' ', '_'),
+                    StandardCharsets.UTF_8.name(),
+                )
+            }
+            rows += OnlineArticle(
+                pageId = pageId,
+                lang = language,
+                title = title,
+                summary = summary,
+                wikiUrl = wikiUrl,
+                sourceRevId = null,
+                updatedAt = nowIso,
+            )
+        }
+        return rows
+    }
+
+    private fun fetchSeededFallback(
+        language: String,
+        count: Int,
+    ): List<OnlineArticle> {
+        val queries = listOf(
+            "science",
+            "history",
+            "technology",
+            "mathematics",
+            "biology",
+            "space",
+            "culture",
+            "geography",
+            "engineering",
+            "art",
+        )
+        val seen = mutableSetOf<Long>()
+        val rows = mutableListOf<OnlineArticle>()
+        for (query in queries) {
+            if (rows.size >= count) break
+            val chunk = searchTitles(
+                language = language,
+                query = query,
+                limit = (count - rows.size).coerceIn(1, 10),
+            )
+            chunk.forEach { article ->
+                if (rows.size >= count) return@forEach
+                if (seen.add(article.pageId)) {
+                    rows += article
+                }
+            }
+        }
+        return rows
     }
 
     private fun fetchJson(url: String): String {

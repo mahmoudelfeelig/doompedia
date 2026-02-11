@@ -51,7 +51,8 @@ class MainActivity : ComponentActivity() {
                     state = state.value,
                     snackbarHostState = snackbarHostState,
                     onQueryChange = viewModel::onQueryChange,
-                    onRefresh = viewModel::refreshFeed,
+                    onRefreshFeed = viewModel::refreshFeedManual,
+                    onLoadMoreFeed = viewModel::loadMoreFeed,
                     onOpenCard = viewModel::onOpenCard,
                     onToggleBookmark = viewModel::onToggleBookmark,
                     onMoreLike = viewModel::onMoreLike,
@@ -68,6 +69,7 @@ class MainActivity : ComponentActivity() {
                     onExportSelectedFolder = viewModel::exportSelectedFolder,
                     onExportAllFolders = viewModel::exportAllFolders,
                     onImportFolders = viewModel::importFolders,
+                    onUnsaveFromSelectedFolder = viewModel::unsaveFromSelectedFolder,
                     onChoosePack = viewModel::choosePack,
                     onAddPackByManifestUrl = viewModel::addPackByManifestUrl,
                     onRemovePack = viewModel::removePack,
@@ -79,11 +81,14 @@ class MainActivity : ComponentActivity() {
                     onSetHighContrast = viewModel::setHighContrast,
                     onSetReduceMotion = viewModel::setReduceMotion,
                     onSetWifiOnly = viewModel::setWifiOnly,
+                    onSetDownloadPreviewImages = viewModel::setDownloadPreviewImages,
+                    onDownloadImagesNow = viewModel::downloadImagesNow,
                     onSetManifestUrl = viewModel::setManifestUrl,
                     onCheckUpdatesNow = viewModel::checkForUpdatesNow,
                     onExportSettings = viewModel::exportSettings,
                     onImportSettings = viewModel::importSettings,
                     onOpenExternalUrl = viewModel::openExternalUrl,
+                    onResolveThumbnailUrl = viewModel::resolveThumbnailUrl,
                 )
             }
 

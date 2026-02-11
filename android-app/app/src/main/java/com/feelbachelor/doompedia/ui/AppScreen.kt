@@ -13,10 +13,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -38,7 +41,8 @@ fun AppScreen(
     state: MainUiState,
     snackbarHostState: SnackbarHostState,
     onQueryChange: (String) -> Unit,
-    onRefresh: () -> Unit,
+    onRefreshFeed: () -> Unit,
+    onLoadMoreFeed: () -> Unit,
     onOpenCard: (ArticleCard) -> Unit,
     onToggleBookmark: (ArticleCard) -> Unit,
     onMoreLike: (ArticleCard) -> Unit,
@@ -55,6 +59,7 @@ fun AppScreen(
     onExportSelectedFolder: () -> Unit,
     onExportAllFolders: () -> Unit,
     onImportFolders: (String) -> Unit,
+    onUnsaveFromSelectedFolder: (ArticleCard) -> Unit,
     onChoosePack: (PackOption) -> Unit,
     onAddPackByManifestUrl: (String) -> Unit,
     onRemovePack: (PackOption) -> Unit,
@@ -66,13 +71,18 @@ fun AppScreen(
     onSetHighContrast: (Boolean) -> Unit,
     onSetReduceMotion: (Boolean) -> Unit,
     onSetWifiOnly: (Boolean) -> Unit,
+    onSetDownloadPreviewImages: (Boolean) -> Unit,
+    onDownloadImagesNow: () -> Unit,
     onSetManifestUrl: (String) -> Unit,
     onCheckUpdatesNow: () -> Unit,
     onExportSettings: () -> Unit,
     onImportSettings: (String) -> Unit,
     onOpenExternalUrl: (String) -> Unit,
+    onResolveThumbnailUrl: suspend (ArticleCard) -> String?,
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
+    var exploreReselectToken by remember { mutableLongStateOf(0L) }
+    val feedListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -84,7 +94,7 @@ fun AppScreen(
                         selected = selectedTab == index,
                         onClick = {
                             if (selectedTab == index && tab == Tab.FEED) {
-                                onRefresh()
+                                exploreReselectToken += 1L
                             }
                             selectedTab = index
                         },
@@ -104,16 +114,20 @@ fun AppScreen(
             Tab.FEED -> FeedScreen(
                 paddingValues = padding,
                 state = state,
+                listState = feedListState,
                 onQueryChange = onQueryChange,
-                onRefresh = onRefresh,
+                onRefresh = onRefreshFeed,
+                onLoadMore = onLoadMoreFeed,
+                exploreReselectToken = exploreReselectToken,
                 onOpenCard = onOpenCard,
-                onToggleBookmark = onToggleBookmark,
                 onMoreLike = onMoreLike,
                 onLessLike = onLessLike,
                 onShowFolderPicker = onShowFolderPicker,
                 onToggleFolderSelection = onToggleFolderSelection,
                 onApplyFolderSelection = onApplyFolderSelection,
                 onDismissFolderPicker = onDismissFolderPicker,
+                onResolveThumbnailUrl = onResolveThumbnailUrl,
+                downloadPreviewImages = state.settings.downloadPreviewImages,
             )
 
             Tab.SAVED -> SavedScreen(
@@ -129,17 +143,21 @@ fun AppScreen(
                 onImportFolders = onImportFolders,
                 onOpenCard = onOpenCard,
                 onToggleBookmark = onToggleBookmark,
-                onShowFolderPicker = onShowFolderPicker,
+                onUnsaveFromSelectedFolder = onUnsaveFromSelectedFolder,
             )
 
             Tab.PACKS -> PacksScreen(
                 paddingValues = padding,
                 settings = state.settings,
                 updateInProgress = state.updateInProgress,
+                updateProgress = state.updateProgress,
+                imagePrefetch = state.imagePrefetch,
                 packs = state.packCatalog,
                 onChoosePack = onChoosePack,
                 onAddPackByManifestUrl = onAddPackByManifestUrl,
                 onRemovePack = onRemovePack,
+                onSetDownloadPreviewImages = onSetDownloadPreviewImages,
+                onDownloadImagesNow = onDownloadImagesNow,
                 onSetManifestUrl = onSetManifestUrl,
                 onCheckUpdatesNow = onCheckUpdatesNow,
             )

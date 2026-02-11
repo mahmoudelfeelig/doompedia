@@ -12,6 +12,7 @@ import com.feelbachelor.doompedia.data.importer.TopicClassifier
 import com.feelbachelor.doompedia.data.db.ArticleEntity
 import com.feelbachelor.doompedia.data.net.OnlineArticle
 import com.feelbachelor.doompedia.domain.ArticleCard
+import com.feelbachelor.doompedia.domain.CardKeywords
 import com.feelbachelor.doompedia.domain.PersonalizationLevel
 import com.feelbachelor.doompedia.domain.ReadSort
 import com.feelbachelor.doompedia.domain.RankedCard
@@ -36,8 +37,84 @@ class WikiRepository(
     suspend fun ensureDefaults() {
         val now = System.currentTimeMillis()
         dao.ensureDefaultFolder(createdAt = now)
-        dao.ensureReadFolder(createdAt = now)
+        repairReadFolderSlot(now)
         dao.backfillBookmarksIntoDefaultFolder()
+    }
+
+    suspend fun articleCount(): Int = dao.articleCount()
+
+    suspend fun articleCount(language: String): Int = dao.articleCount(language)
+
+    private suspend fun repairReadFolderSlot(now: Long) {
+        val folderInReadSlot = dao.allFolders().firstOrNull { it.folderId == DEFAULT_READ_FOLDER_ID }
+        if (folderInReadSlot == null) {
+            dao.ensureReadFolder(createdAt = now)
+            dao.clearFolderRefsForFolder(DEFAULT_READ_FOLDER_ID)
+            return
+        }
+
+        if (folderInReadSlot.name.equals("Read", ignoreCase = true)) {
+            if (!folderInReadSlot.isDefault || folderInReadSlot.name != "Read") {
+                dao.upsertFolder(
+                    folderInReadSlot.copy(
+                        name = "Read",
+                        isDefault = true,
+                    )
+                )
+            }
+            dao.clearFolderRefsForFolder(DEFAULT_READ_FOLDER_ID)
+            return
+        }
+
+        val resolvedTargetId = run {
+            val existing = dao.folderIdByName(folderInReadSlot.name)?.takeIf { it != DEFAULT_READ_FOLDER_ID }
+            if (existing != null) {
+                existing
+            } else {
+                val inserted = dao.insertFolder(
+                    SaveFolderEntity(
+                        name = folderInReadSlot.name,
+                        isDefault = false,
+                        createdAt = folderInReadSlot.createdAt,
+                    )
+                )
+                if (inserted > 0L) {
+                    inserted
+                } else {
+                    var suffix = 2
+                    var candidateName = "${folderInReadSlot.name} ($suffix)"
+                    while (dao.folderIdByName(candidateName) != null) {
+                        suffix += 1
+                        candidateName = "${folderInReadSlot.name} ($suffix)"
+                    }
+                    dao.insertFolder(
+                        SaveFolderEntity(
+                            name = candidateName,
+                            isDefault = false,
+                            createdAt = folderInReadSlot.createdAt,
+                        )
+                    ).takeIf { it > 0L }
+                }
+            }
+        }
+
+        if (resolvedTargetId != null) {
+            val refs = dao.folderRefsForFolders(listOf(DEFAULT_READ_FOLDER_ID))
+            if (refs.isNotEmpty()) {
+                dao.upsertFolderRefs(
+                    refs.map { ref ->
+                        ref.copy(
+                            folderId = resolvedTargetId,
+                            createdAt = now,
+                        )
+                    }
+                )
+            }
+        }
+
+        dao.forceDeleteFolder(DEFAULT_READ_FOLDER_ID)
+        dao.ensureReadFolder(createdAt = now)
+        dao.clearFolderRefsForFolder(DEFAULT_READ_FOLDER_ID)
     }
 
     suspend fun loadFeed(
@@ -55,6 +132,61 @@ class WikiRepository(
             level = personalizationLevel,
             limit = limit,
         )
+    }
+
+    suspend fun loadFeedPage(
+        language: String,
+        personalizationLevel: PersonalizationLevel,
+        offset: Int,
+        limit: Int = 50,
+    ): List<RankedCard> {
+        val safeLimit = limit.coerceIn(1, 200)
+        val safeOffset = offset.coerceAtLeast(0)
+        val candidates = dao.feedCandidatesPage(
+            lang = language,
+            limit = safeLimit,
+            offset = safeOffset,
+        ).map { it.toDomain() }
+        if (candidates.isEmpty()) return emptyList()
+        val affinity = dao.topicAffinities(language).associate { it.topicKey to it.score }
+        val recentTopics = dao.recentTopics(rankingConfig.guardrails.windowSize)
+        val ranked = ranker.rank(
+            candidates = candidates,
+            topicAffinity = affinity,
+            recentlySeenTopics = recentTopics,
+            level = personalizationLevel,
+            limit = safeLimit,
+        )
+        if (ranked.size >= safeLimit) return ranked
+
+        val rankedIds = ranked.asSequence().map { it.card.pageId }.toHashSet()
+        val fallback = candidates
+            .asSequence()
+            .filterNot { rankedIds.contains(it.pageId) }
+            .take(safeLimit - ranked.size)
+            .map { card ->
+                RankedCard(
+                    card = card,
+                    score = 0.0,
+                    why = "Additional results from downloaded packs",
+                )
+            }
+            .toList()
+        return ranked + fallback
+    }
+
+    suspend fun feedPageCards(
+        language: String,
+        offset: Int,
+        limit: Int,
+    ): List<ArticleCard> {
+        val safeLimit = limit.coerceIn(1, 500)
+        val safeOffset = offset.coerceAtLeast(0)
+        return dao.feedCandidatesPage(
+            lang = language,
+            limit = safeLimit,
+            offset = safeOffset,
+        ).map { it.toDomain() }
     }
 
     suspend fun rankCandidates(
@@ -136,10 +268,21 @@ class WikiRepository(
     }
 
     suspend fun recordOpen(card: ArticleCard, personalizationLevel: PersonalizationLevel) {
+        val preferenceKeys = CardKeywords.preferenceKeys(
+            title = card.title,
+            summary = card.summary,
+            topicKey = card.topicKey,
+            maxKeys = 10,
+        )
+        val primaryTopic = CardKeywords.primaryTopic(
+            title = card.title,
+            summary = card.summary,
+            topicKey = card.topicKey,
+        )
         dao.insertHistory(
             HistoryEntity(
                 pageId = card.pageId,
-                topicKey = card.topicKey,
+                topicKey = primaryTopic,
                 openedAt = System.currentTimeMillis(),
             )
         )
@@ -148,9 +291,9 @@ class WikiRepository(
         if (levelMultiplier <= 0.0) return
 
         val learningRate = rankingConfig.personalization.learningRates["open"] ?: 0.0
-        updateTopicAffinity(
+        updateTopicAffinities(
             language = card.lang,
-            topicKey = card.topicKey,
+            topicKeys = preferenceKeys,
             delta = learningRate * levelMultiplier,
         )
     }
@@ -159,10 +302,16 @@ class WikiRepository(
         val levelMultiplier = rankingConfig.personalization.levels[personalizationLevel.name] ?: 0.0
         if (levelMultiplier <= 0.0) return
 
-        val learningRate = rankingConfig.personalization.learningRates["hide"] ?: -0.5
-        updateTopicAffinity(
-            language = card.lang,
+        val preferenceKeys = CardKeywords.preferenceKeys(
+            title = card.title,
+            summary = card.summary,
             topicKey = card.topicKey,
+            maxKeys = 10,
+        )
+        val learningRate = rankingConfig.personalization.learningRates["hide"] ?: -0.5
+        updateTopicAffinities(
+            language = card.lang,
+            topicKeys = preferenceKeys,
             delta = learningRate * levelMultiplier,
         )
     }
@@ -171,12 +320,18 @@ class WikiRepository(
         val levelMultiplier = rankingConfig.personalization.levels[personalizationLevel.name] ?: 0.0
         if (levelMultiplier <= 0.0) return
 
+        val preferenceKeys = CardKeywords.preferenceKeys(
+            title = card.title,
+            summary = card.summary,
+            topicKey = card.topicKey,
+            maxKeys = 10,
+        )
         val learningRate = rankingConfig.personalization.learningRates["like"]
             ?: rankingConfig.personalization.learningRates["bookmark"]
             ?: 0.7
-        updateTopicAffinity(
+        updateTopicAffinities(
             language = card.lang,
-            topicKey = card.topicKey,
+            topicKeys = preferenceKeys,
             delta = learningRate * levelMultiplier,
         )
     }
@@ -285,6 +440,17 @@ class WikiRepository(
         } else {
             dao.deleteBookmark(pageId)
         }
+    }
+
+    suspend fun removeFromFolder(folderId: Long, pageId: Long): Boolean {
+        ensureDefaults()
+        if (folderId == DEFAULT_READ_FOLDER_ID) return false
+        if (folderId == DEFAULT_BOOKMARKS_FOLDER_ID) {
+            val removedBookmark = dao.deleteBookmark(pageId) > 0
+            val removedRef = dao.deleteFolderRef(folderId, pageId) > 0
+            return removedBookmark || removedRef
+        }
+        return dao.deleteFolderRef(folderId, pageId) > 0
     }
 
     suspend fun exportFolders(selectedFolderIds: Set<Long>? = null): String {
@@ -407,6 +573,37 @@ class WikiRepository(
                 updatedAt = System.currentTimeMillis(),
             )
         )
+    }
+
+    private suspend fun updateTopicAffinities(language: String, topicKeys: List<String>, delta: Double) {
+        if (topicKeys.isEmpty()) return
+        val uniqueKeys = topicKeys
+            .asSequence()
+            .map { it.trim().lowercase() }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .take(10)
+            .toList()
+        if (uniqueKeys.isEmpty()) return
+
+        val primary = uniqueKeys.first()
+        val secondary = uniqueKeys.drop(1)
+        val primaryDelta = delta * 0.55
+        val secondaryDelta = if (secondary.isNotEmpty()) delta * 0.45 / secondary.size.toDouble() else 0.0
+
+        updateTopicAffinity(
+            language = language,
+            topicKey = primary,
+            delta = primaryDelta,
+        )
+
+        secondary.forEach { key ->
+            updateTopicAffinity(
+                language = language,
+                topicKey = key,
+                delta = secondaryDelta,
+            )
+        }
     }
 }
 

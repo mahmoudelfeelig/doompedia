@@ -42,7 +42,10 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
-        freeCompilerArgs += listOf("-Xjvm-default=all")
+        freeCompilerArgs += listOf(
+            "-Xjvm-default=all",
+            "-opt-in=androidx.compose.material.ExperimentalMaterialApi",
+        )
     }
 
     buildFeatures {
@@ -92,6 +95,8 @@ dependencies {
 
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
+    implementation("io.coil-kt:coil:2.7.0")
+    implementation("io.coil-kt:coil-compose:2.7.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.6.3")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")

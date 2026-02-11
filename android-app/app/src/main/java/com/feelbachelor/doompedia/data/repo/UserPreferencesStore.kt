@@ -30,8 +30,10 @@ data class UserSettings(
     val reduceMotion: Boolean = false,
     val readSort: ReadSort = ReadSort.NEWEST_FIRST,
     val wifiOnlyDownloads: Boolean = true,
+    val downloadPreviewImages: Boolean = false,
     val manifestUrl: String = "",
     val installedPackVersion: Int = 0,
+    val installedPackSignature: String = "",
     val lastUpdateIso: String = "",
     val lastUpdateStatus: String = "",
     val customPacksJson: String = "[]",
@@ -50,8 +52,10 @@ class UserPreferencesStore(
     private val reduceMotionKey = booleanPreferencesKey("reduce_motion")
     private val readSortKey = stringPreferencesKey("read_sort")
     private val wifiOnlyKey = booleanPreferencesKey("wifi_only_downloads")
+    private val downloadImagesKey = booleanPreferencesKey("download_preview_images")
     private val manifestUrlKey = stringPreferencesKey("manifest_url")
     private val installedPackVersionKey = intPreferencesKey("installed_pack_version")
+    private val installedPackSignatureKey = stringPreferencesKey("installed_pack_signature")
     private val lastUpdateIsoKey = stringPreferencesKey("last_update_iso")
     private val lastUpdateStatusKey = stringPreferencesKey("last_update_status")
     private val customPacksKey = stringPreferencesKey("custom_packs_json")
@@ -100,12 +104,27 @@ class UserPreferencesStore(
         context.dataStore.edit { prefs -> prefs[wifiOnlyKey] = enabled }
     }
 
+    suspend fun setDownloadPreviewImages(enabled: Boolean) {
+        context.dataStore.edit { prefs -> prefs[downloadImagesKey] = enabled }
+    }
+
     suspend fun setManifestUrl(url: String) {
         context.dataStore.edit { prefs -> prefs[manifestUrlKey] = url.trim() }
     }
 
     suspend fun setInstalledPackVersion(version: Int) {
         context.dataStore.edit { prefs -> prefs[installedPackVersionKey] = version }
+    }
+
+    suspend fun setInstalledPackSignature(signature: String) {
+        context.dataStore.edit { prefs -> prefs[installedPackSignatureKey] = signature.trim() }
+    }
+
+    suspend fun setInstalledPackInfo(version: Int, signature: String) {
+        context.dataStore.edit { prefs ->
+            prefs[installedPackVersionKey] = version
+            prefs[installedPackSignatureKey] = signature.trim()
+        }
     }
 
     suspend fun setLastUpdate(timestampIso: String, status: String) {
@@ -131,8 +150,10 @@ class UserPreferencesStore(
             .put("reduceMotion", settings.reduceMotion)
             .put("readSort", settings.readSort.name)
             .put("wifiOnlyDownloads", settings.wifiOnlyDownloads)
+            .put("downloadPreviewImages", settings.downloadPreviewImages)
             .put("manifestUrl", settings.manifestUrl)
             .put("installedPackVersion", settings.installedPackVersion)
+            .put("installedPackSignature", settings.installedPackSignature)
             .put("customPacksJson", settings.customPacksJson)
         return payload.toString(2)
     }
@@ -175,9 +196,15 @@ class UserPreferencesStore(
                 if (root.has("wifiOnlyDownloads")) {
                     prefs[wifiOnlyKey] = root.optBoolean("wifiOnlyDownloads", true)
                 }
+                if (root.has("downloadPreviewImages")) {
+                    prefs[downloadImagesKey] = root.optBoolean("downloadPreviewImages", false)
+                }
                 root.optString("manifestUrl").takeIf { it.isNotBlank() }?.let { prefs[manifestUrlKey] = it.trim() }
                 if (root.has("installedPackVersion")) {
                     prefs[installedPackVersionKey] = root.optInt("installedPackVersion", 0).coerceAtLeast(0)
+                }
+                if (root.has("installedPackSignature")) {
+                    prefs[installedPackSignatureKey] = root.optString("installedPackSignature", "").trim()
                 }
                 root.optString("customPacksJson").takeIf { it.isNotBlank() }?.let { prefs[customPacksKey] = it.trim() }
             }
@@ -213,8 +240,10 @@ class UserPreferencesStore(
             reduceMotion = prefs[reduceMotionKey] ?: false,
             readSort = readSort,
             wifiOnlyDownloads = prefs[wifiOnlyKey] ?: true,
+            downloadPreviewImages = prefs[downloadImagesKey] ?: false,
             manifestUrl = prefs[manifestUrlKey] ?: "",
             installedPackVersion = prefs[installedPackVersionKey] ?: 0,
+            installedPackSignature = prefs[installedPackSignatureKey] ?: "",
             lastUpdateIso = prefs[lastUpdateIsoKey] ?: "",
             lastUpdateStatus = prefs[lastUpdateStatusKey] ?: "",
             customPacksJson = prefs[customPacksKey] ?: "[]",

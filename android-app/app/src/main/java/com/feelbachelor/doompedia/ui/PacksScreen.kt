@@ -12,6 +12,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,10 +30,14 @@ fun PacksScreen(
     paddingValues: PaddingValues,
     settings: UserSettings,
     updateInProgress: Boolean,
+    updateProgress: UpdateProgressUi?,
+    imagePrefetch: ImagePrefetchUi,
     packs: List<PackOption>,
     onChoosePack: (PackOption) -> Unit,
     onAddPackByManifestUrl: (String) -> Unit,
     onRemovePack: (PackOption) -> Unit,
+    onSetDownloadPreviewImages: (Boolean) -> Unit,
+    onDownloadImagesNow: () -> Unit,
     onSetManifestUrl: (String) -> Unit,
     onCheckUpdatesNow: () -> Unit,
 ) {
@@ -173,16 +179,99 @@ fun PacksScreen(
         }
 
         item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "Download preview images",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(
+                    checked = settings.downloadPreviewImages,
+                    onCheckedChange = onSetDownloadPreviewImages,
+                )
+            }
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(
+                    onClick = onDownloadImagesNow,
+                    enabled = settings.downloadPreviewImages && !imagePrefetch.running,
+                ) {
+                    Text(if (imagePrefetch.running) "Downloading images..." else "Download images now")
+                }
+            }
+        }
+
+        if (imagePrefetch.running || imagePrefetch.scanned > 0) {
+            item {
+                val total = imagePrefetch.total.coerceAtLeast(1)
+                val progress = (imagePrefetch.scanned.toFloat() / total.toFloat()).coerceIn(0f, 1f)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "Image cache progress",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Text(
+                        text = "${(progress * 100f).toInt()}% • scanned ${imagePrefetch.scanned}/${imagePrefetch.total} • cached ${imagePrefetch.downloaded}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
+        item {
             Text(
                 text = "Installed pack version: ${settings.installedPackVersion}",
                 style = MaterialTheme.typography.bodySmall,
             )
         }
 
+        if (updateProgress != null) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "${updateProgress.phase} ${updateProgress.detail}".trim(),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    LinearProgressIndicator(
+                        progress = { (updateProgress.percent / 100f).coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    val totalLabel = if (updateProgress.totalBytes > 0L) {
+                        "${formatBytes(updateProgress.downloadedBytes)} / ${formatBytes(updateProgress.totalBytes)}"
+                    } else {
+                        formatBytes(updateProgress.downloadedBytes)
+                    }
+                    val speedLabel = if (updateProgress.bytesPerSecond > 0L) {
+                        " • ${formatBytes(updateProgress.bytesPerSecond)}/s"
+                    } else {
+                        ""
+                    }
+                    Text(
+                        text = "${"%.1f".format(updateProgress.percent)}% • $totalLabel$speedLabel",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
         if (settings.lastUpdateIso.isNotBlank()) {
             item {
                 Text(
-                    text = "Last checked at: ${settings.lastUpdateIso}",
+                    text = "Last checked: ${formatUpdateTimestamp(settings.lastUpdateIso)}",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -198,4 +287,14 @@ fun PacksScreen(
             }
         }
     }
+}
+
+private fun formatBytes(bytes: Long): String {
+    if (bytes <= 0L) return "0 B"
+    val kb = bytes / 1024.0
+    if (kb < 1024.0) return String.format("%.0f KB", kb)
+    val mb = kb / 1024.0
+    if (mb < 1024.0) return String.format("%.1f MB", mb)
+    val gb = mb / 1024.0
+    return String.format("%.2f GB", gb)
 }
