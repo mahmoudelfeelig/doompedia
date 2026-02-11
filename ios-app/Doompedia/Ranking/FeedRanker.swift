@@ -3,8 +3,14 @@ import Foundation
 struct FeedRanker {
     let config: RankingConfig
 
+    private struct TopicDescriptor {
+        let primaryTopic: String
+        let preferenceKeys: [String]
+    }
+
     private struct BaseScore {
         let card: ArticleCard
+        let primaryTopic: String
         let interest: Double
         let novelty: Double
         let quality: Double
@@ -36,12 +42,18 @@ struct FeedRanker {
 
         let orderedBase = candidates
             .map { card in
-                let interest = (topicAffinity[card.topicKey] ?? 0.0) * config.weights.interest * levelFactor
-                let novelty = noveltyScore(card: card, recent: recentlySeenTopics)
+                let descriptor = describeTopics(card)
+                let interest = interestScore(
+                    topicAffinity: topicAffinity,
+                    descriptor: descriptor,
+                    levelFactor: levelFactor
+                )
+                let novelty = noveltyScore(primaryTopic: descriptor.primaryTopic, recent: recentlySeenTopics)
                 let quality = card.qualityScore * config.weights.quality
-                let repetition = repetitionPenalty(topic: card.topicKey, recent: recentlySeenTopics)
+                let repetition = repetitionPenalty(topic: descriptor.primaryTopic, recent: recentlySeenTopics)
                 return BaseScore(
                     card: card,
+                    primaryTopic: descriptor.primaryTopic,
                     interest: interest,
                     novelty: novelty,
                     quality: quality,
@@ -59,7 +71,7 @@ struct FeedRanker {
         for base in orderedBase {
             if result.count >= limit { break }
 
-            let topic = base.card.topicKey
+            let topic = base.primaryTopic
             let sameTopicCount = selectedTopics.filter { $0 == topic }.count
             if sameTopicCount >= config.guardrails.maxSameTopicInWindow { continue }
             if violatesDistinctTopicGuardrail(selectedTopics: selectedTopics, candidateTopic: topic) { continue }
@@ -91,10 +103,13 @@ struct FeedRanker {
         if result.count < limit {
             for base in orderedBase where !selectedIDs.contains(base.card.pageId) {
                 if result.count >= limit { break }
-                let isExploration = !topAffinityTopics.isEmpty && !topAffinityTopics.contains(base.card.topicKey)
-                let diversity = diversityScore(topic: base.card.topicKey, selected: selectedTopics)
+                if selectedTopics.filter({ $0 == base.primaryTopic }).count >= config.guardrails.maxSameTopicInWindow { continue }
+                if violatesDistinctTopicGuardrail(selectedTopics: selectedTopics, candidateTopic: base.primaryTopic) { continue }
+
+                let isExploration = !topAffinityTopics.isEmpty && !topAffinityTopics.contains(base.primaryTopic)
+                let diversity = diversityScore(topic: base.primaryTopic, selected: selectedTopics)
                 let why = buildWhy(
-                    topic: base.card.topicKey,
+                    topic: base.primaryTopic,
                     interest: base.interest,
                     novelty: base.novelty,
                     diversity: diversity,
@@ -107,7 +122,7 @@ struct FeedRanker {
                         why: why
                     )
                 )
-                selectedTopics.append(base.card.topicKey)
+                selectedTopics.append(base.primaryTopic)
                 selectedIDs.insert(base.card.pageId)
             }
         }
@@ -115,9 +130,55 @@ struct FeedRanker {
         return Array(result.prefix(limit))
     }
 
-    private func noveltyScore(card: ArticleCard, recent: [String]) -> Double {
+    private func describeTopics(_ card: ArticleCard) -> TopicDescriptor {
+        let extracted = CardKeywords.preferenceKeys(
+            title: card.title,
+            summary: card.summary,
+            topicKey: card.topicKey,
+            maxKeys: 10
+        )
+        let explicitTopic = normalizeTopicKey(card.topicKey)
+        let hasExplicitTopic = !explicitTopic.isEmpty && !["general", "unknown", "other"].contains(explicitTopic)
+        var keys = extracted
+        if hasExplicitTopic {
+            keys = [explicitTopic] + extracted
+        }
+        keys = Array(NSOrderedSet(array: keys)) as? [String] ?? keys
+        keys = Array(keys.prefix(10))
+        let inferredPrimary = CardKeywords.primaryTopic(
+            title: card.title,
+            summary: card.summary,
+            topicKey: card.topicKey
+        )
+        let primary = hasExplicitTopic ? explicitTopic : inferredPrimary
+        return TopicDescriptor(primaryTopic: primary, preferenceKeys: keys)
+    }
+
+    private func normalizeTopicKey(_ raw: String) -> String {
+        raw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "_", with: "-")
+            .replacingOccurrences(of: "\\s+", with: "-", options: .regularExpression)
+    }
+
+    private func interestScore(
+        topicAffinity: [String: Double],
+        descriptor: TopicDescriptor,
+        levelFactor: Double
+    ) -> Double {
+        let values = descriptor.preferenceKeys.map { topicAffinity[$0] ?? 0.0 }
+        guard !values.isEmpty else { return 0.0 }
+
+        let maxSignal = values.max() ?? 0.0
+        let avgSignal = values.reduce(0.0, +) / Double(values.count)
+        let blended = (maxSignal * 0.7) + (avgSignal * 0.3)
+        return blended * config.weights.interest * levelFactor
+    }
+
+    private func noveltyScore(primaryTopic: String, recent: [String]) -> Double {
         if recent.isEmpty { return config.weights.novelty }
-        let inCooldown = recent.prefix(config.guardrails.cooldownCards).contains(card.topicKey)
+        let inCooldown = recent.prefix(config.guardrails.cooldownCards).contains(primaryTopic)
         return inCooldown ? config.weights.novelty * 0.1 : config.weights.novelty
     }
 

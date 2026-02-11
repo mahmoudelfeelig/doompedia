@@ -29,9 +29,11 @@ final class MainViewModel: ObservableObject {
     @Published var folderPickerSelection: Set<Int64> = []
     @Published var isLoading: Bool = true
     @Published var isUpdatingPack: Bool = false
+    @Published var updateProgress: PackUpdateProgress?
     @Published var message: String?
     @Published var packCatalog: [PackOption]
     @Published var effectiveFeedMode: FeedMode
+    @Published var exploreReselectToken: Int = 0
 
     var colorScheme: ColorScheme? {
         switch settings.themeMode {
@@ -42,6 +44,7 @@ final class MainViewModel: ObservableObject {
     }
 
     private let container: AppContainer
+    private var thumbnailCache: [Int64: String?] = [:]
 
     init(container: AppContainer) {
         self.container = container
@@ -63,11 +66,12 @@ final class MainViewModel: ObservableObject {
         }
     }
 
-    func refreshFeed() async {
+    func refreshFeed(manual: Bool = false) async {
         isLoading = true
         defer { isLoading = false }
 
         effectiveFeedMode = resolvedFeedMode(requested: settings.feedMode)
+        let previousTopID = feed.first?.card.pageId
 
         do {
             if effectiveFeedMode == .online {
@@ -108,27 +112,46 @@ final class MainViewModel: ObservableObject {
                             bookmarked: false
                         )
                     }
-                    feed = try container.repository.rankCandidates(
+                    let ranked = try container.repository.rankCandidates(
                         language: settings.language,
                         level: settings.personalizationLevel,
                         candidates: candidates
                     )
+                    feed = applyManualTopShuffleIfNeeded(
+                        ranked: ranked,
+                        previousTopID: previousTopID,
+                        manual: manual
+                    )
                 } else {
-                    feed = try container.repository.loadFeed(
+                    let ranked = try container.repository.loadFeed(
                         language: settings.language,
                         level: settings.personalizationLevel
+                    )
+                    feed = applyManualTopShuffleIfNeeded(
+                        ranked: ranked,
+                        previousTopID: previousTopID,
+                        manual: manual
                     )
                 }
                 return
             }
 
-            feed = try container.repository.loadFeed(
+            let ranked = try container.repository.loadFeed(
                 language: settings.language,
                 level: settings.personalizationLevel
+            )
+            feed = applyManualTopShuffleIfNeeded(
+                ranked: ranked,
+                previousTopID: previousTopID,
+                manual: manual
             )
         } catch {
             message = "Failed to load feed: \(error.localizedDescription)"
         }
+    }
+
+    func handleExploreReselected() {
+        exploreReselectToken += 1
     }
 
     func refreshSaved() async {
@@ -295,8 +318,15 @@ final class MainViewModel: ObservableObject {
     func moreLike(_ card: ArticleCard) async {
         do {
             try container.repository.recordMoreLike(card: card, level: settings.personalizationLevel)
-            message = "Feed updated to show more \(prettyTopic(card.topicKey))"
-            await refreshFeed()
+            let keys = CardKeywords.preferenceKeys(
+                title: card.title,
+                summary: card.summary,
+                topicKey: card.topicKey,
+                maxKeys: 10
+            )
+            let labels = keys.map { CardKeywords.prettyTopic($0) }.joined(separator: ", ")
+            message = "Feed updated to show more like: \(labels)"
+            await refreshFeed(manual: true)
         } catch {
             message = "Could not update recommendation preference"
         }
@@ -305,8 +335,15 @@ final class MainViewModel: ObservableObject {
     func lessLike(_ card: ArticleCard) async {
         do {
             try container.repository.recordLessLike(card: card, level: settings.personalizationLevel)
-            message = "Feed adjusted for less \(prettyTopic(card.topicKey))"
-            await refreshFeed()
+            let keys = CardKeywords.preferenceKeys(
+                title: card.title,
+                summary: card.summary,
+                topicKey: card.topicKey,
+                maxKeys: 10
+            )
+            let labels = keys.map { CardKeywords.prettyTopic($0) }.joined(separator: ", ")
+            message = "Feed adjusted for less like: \(labels)"
+            await refreshFeed(manual: true)
         } catch {
             message = "Could not update preferences"
         }
@@ -373,6 +410,11 @@ final class MainViewModel: ObservableObject {
 
     func setWifiOnly(_ enabled: Bool) {
         container.settingsStore.update { $0.wifiOnlyDownloads = enabled }
+        syncSettingsFromStore()
+    }
+
+    func setDownloadPreviewImages(_ enabled: Bool) {
+        container.settingsStore.update { $0.downloadPreviewImages = enabled }
         syncSettingsFromStore()
     }
 
@@ -498,12 +540,25 @@ final class MainViewModel: ObservableObject {
         }
 
         isUpdatingPack = true
+        updateProgress = PackUpdateProgress(
+            phase: "Starting",
+            percent: 0,
+            downloadedBytes: 0,
+            totalBytes: 0,
+            bytesPerSecond: 0,
+            detail: ""
+        )
         defer { isUpdatingPack = false }
 
         let result = await container.updateService.checkAndApply(
             manifestURLString: settings.manifestURL,
             wifiOnly: settings.wifiOnlyDownloads,
-            installedVersion: settings.installedPackVersion
+            installedVersion: settings.installedPackVersion,
+            onProgress: { [weak self] progress in
+                Task { @MainActor in
+                    self?.updateProgress = progress
+                }
+            }
         )
 
         container.settingsStore.update { current in
@@ -519,11 +574,47 @@ final class MainViewModel: ObservableObject {
         }
     }
 
+    func resolveThumbnailURL(for card: ArticleCard) async -> String? {
+        if !settings.downloadPreviewImages { return nil }
+        if abs(card.pageId) % 10 != 0 { return nil }
+        if !NetworkMonitor.shared.isOnline { return nil }
+        if let cached = thumbnailCache[card.pageId] {
+            return cached
+        }
+
+        let fetched = try? await container.wikipediaAPIClient.fetchThumbnailURL(
+            language: card.lang,
+            title: card.title,
+            maxWidth: 720
+        )
+        thumbnailCache[card.pageId] = fetched
+        if thumbnailCache.count > 3000, let first = thumbnailCache.keys.first {
+            thumbnailCache.removeValue(forKey: first)
+        }
+        return fetched ?? nil
+    }
+
     private func resolvedFeedMode(requested: FeedMode) -> FeedMode {
         if requested == .online && !NetworkMonitor.shared.isOnline {
             return .offline
         }
         return requested
+    }
+
+    private func applyManualTopShuffleIfNeeded(
+        ranked: [RankedCard],
+        previousTopID: Int64?,
+        manual: Bool
+    ) -> [RankedCard] {
+        guard
+            manual,
+            ranked.count > 1,
+            let previousTopID,
+            ranked.first?.card.pageId == previousTopID
+        else {
+            return ranked
+        }
+        return Array(ranked.dropFirst()) + [ranked[0]]
     }
 
     private func syncSettingsFromStore() {
@@ -546,6 +637,45 @@ private func buildPackCatalog(customPacksJSON: String) -> [PackOption] {
             articleCount: 1_000_000,
             shardCount: 25,
             includedTopics: ["General", "Science", "History", "Geography", "Culture", "Biography"],
+            removable: false
+        ),
+        PackOption(
+            id: "en-science-250k",
+            title: "English STEM Pack",
+            subtitle: "Focused on science, technology, health, and environment topics.",
+            downloadSize: "~1.2 MB (gzip)",
+            installSize: "~20 MB",
+            manifestURL: "https://packs.example.invalid/packs/en-science-250k/v1/manifest.json",
+            available: true,
+            articleCount: 16_811,
+            shardCount: 1,
+            includedTopics: ["Science", "Technology", "Health", "Environment"],
+            removable: false
+        ),
+        PackOption(
+            id: "en-history-250k",
+            title: "English History & Society",
+            subtitle: "Focused on history, biography, culture, and politics topics.",
+            downloadSize: "~16 MB (gzip)",
+            installSize: "~340 MB",
+            manifestURL: "https://packs.example.invalid/packs/en-history-250k/v1/manifest.json",
+            available: true,
+            articleCount: 250_000,
+            shardCount: 7,
+            includedTopics: ["History", "Biography", "Culture", "Politics"],
+            removable: false
+        ),
+        PackOption(
+            id: "en-all-summaries",
+            title: "English All Summaries",
+            subtitle: "Largest available EN pack with all extracted short summaries.",
+            downloadSize: "~384 MB (gzip)",
+            installSize: "~6-9 GB",
+            manifestURL: "https://packs.example.invalid/packs/en-all-summaries/v1/manifest.json",
+            available: true,
+            articleCount: 6_262_893,
+            shardCount: 157,
+            includedTopics: ["All"],
             removable: false
         )
     ]

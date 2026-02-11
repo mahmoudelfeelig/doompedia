@@ -21,9 +21,11 @@ final class WikipediaAPIClient {
         let target = max(1, min(count, 40))
         var articles: [OnlineArticle] = []
         var seenTitles = Set<String>()
+        let seed = Int(Date().timeIntervalSince1970 * 1000)
 
-        for _ in 0 ..< target {
-            guard let url = URL(string: "https://\(language).wikipedia.org/api/rest_v1/page/random/summary") else {
+        for index in 0 ..< (target * 4) {
+            if articles.count >= target { break }
+            guard let url = URL(string: "https://\(language).wikipedia.org/api/rest_v1/page/random/summary?cb=\(seed + index)") else {
                 break
             }
             let request = makeRequest(url: url)
@@ -113,6 +115,49 @@ final class WikipediaAPIClient {
             )
         }
         return output
+    }
+
+    func fetchThumbnailURL(language: String, title: String, maxWidth: Int = 640) async throws -> String? {
+        let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return nil }
+
+        var components = URLComponents(string: "https://\(language).wikipedia.org/w/api.php")!
+        components.queryItems = [
+            URLQueryItem(name: "action", value: "query"),
+            URLQueryItem(name: "format", value: "json"),
+            URLQueryItem(name: "prop", value: "pageimages"),
+            URLQueryItem(name: "piprop", value: "thumbnail"),
+            URLQueryItem(name: "pithumbsize", value: "\(max(160, min(maxWidth, 1280)))"),
+            URLQueryItem(name: "pilicense", value: "any"),
+            URLQueryItem(name: "titles", value: cleaned),
+        ]
+        guard let url = components.url else { return nil }
+
+        let request = makeRequest(url: url)
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200 ... 299).contains(http.statusCode) else {
+            return nil
+        }
+
+        guard
+            let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let query = payload["query"] as? [String: Any],
+            let pages = query["pages"] as? [String: Any]
+        else {
+            return nil
+        }
+
+        for (_, value) in pages {
+            guard let page = value as? [String: Any],
+                  let thumbnail = page["thumbnail"] as? [String: Any],
+                  let source = thumbnail["source"] as? String,
+                  !source.isEmpty
+            else {
+                continue
+            }
+            return source
+        }
+        return nil
     }
 
     private func makeRequest(url: URL) -> URLRequest {

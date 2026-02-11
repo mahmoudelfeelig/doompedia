@@ -9,7 +9,7 @@ struct RootView: View {
             get: { selectedTab },
             set: { newValue in
                 if selectedTab == newValue, newValue == .explore {
-                    Task { await viewModel.refreshFeed() }
+                    viewModel.handleExploreReselected()
                 }
                 selectedTab = newValue
             }

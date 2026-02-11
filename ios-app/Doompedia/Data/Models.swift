@@ -34,6 +34,7 @@ struct UserSettings: Codable {
     var reduceMotion: Bool = false
     var readSort: ReadSort = .newestFirst
     var wifiOnlyDownloads: Bool = true
+    var downloadPreviewImages: Bool = false
     var manifestURL: String = ""
     var installedPackVersion: Int = 0
     var lastUpdateISO: String = ""
@@ -51,6 +52,7 @@ struct UserSettings: Codable {
         case reduceMotion
         case readSort
         case wifiOnlyDownloads
+        case downloadPreviewImages
         case manifestURL
         case installedPackVersion
         case lastUpdateISO
@@ -72,6 +74,7 @@ struct UserSettings: Codable {
         reduceMotion = try container.decodeIfPresent(Bool.self, forKey: .reduceMotion) ?? false
         readSort = try container.decodeIfPresent(ReadSort.self, forKey: .readSort) ?? .newestFirst
         wifiOnlyDownloads = try container.decodeIfPresent(Bool.self, forKey: .wifiOnlyDownloads) ?? true
+        downloadPreviewImages = try container.decodeIfPresent(Bool.self, forKey: .downloadPreviewImages) ?? false
         manifestURL = try container.decodeIfPresent(String.self, forKey: .manifestURL) ?? ""
         installedPackVersion = try container.decodeIfPresent(Int.self, forKey: .installedPackVersion) ?? 0
         lastUpdateISO = try container.decodeIfPresent(String.self, forKey: .lastUpdateISO) ?? ""

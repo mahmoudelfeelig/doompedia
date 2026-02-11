@@ -92,31 +92,67 @@ final class WikiRepository {
     }
 
     func recordOpen(card: ArticleCard, level: PersonalizationLevel) throws {
-        try store.insertHistory(pageId: card.pageId, topicKey: card.topicKey)
+        let preferenceKeys = CardKeywords.preferenceKeys(
+            title: card.title,
+            summary: card.summary,
+            topicKey: card.topicKey,
+            maxKeys: 10
+        )
+        let primaryTopic = CardKeywords.primaryTopic(
+            title: card.title,
+            summary: card.summary,
+            topicKey: card.topicKey
+        )
+
+        try store.insertHistory(pageId: card.pageId, topicKey: primaryTopic)
 
         let levelFactor = config.personalization.levels[level.rawValue] ?? 0.0
         guard levelFactor > 0 else { return }
 
         let openRate = config.personalization.learningRates["open"] ?? 0
-        try updateAffinity(language: card.lang, topic: card.topicKey, delta: openRate * levelFactor)
+        try updateAffinities(
+            language: card.lang,
+            topics: preferenceKeys,
+            delta: openRate * levelFactor
+        )
     }
 
     func recordLessLike(card: ArticleCard, level: PersonalizationLevel) throws {
         let levelFactor = config.personalization.levels[level.rawValue] ?? 0.0
         guard levelFactor > 0 else { return }
 
+        let preferenceKeys = CardKeywords.preferenceKeys(
+            title: card.title,
+            summary: card.summary,
+            topicKey: card.topicKey,
+            maxKeys: 10
+        )
         let hideRate = config.personalization.learningRates["hide"] ?? -0.5
-        try updateAffinity(language: card.lang, topic: card.topicKey, delta: hideRate * levelFactor)
+        try updateAffinities(
+            language: card.lang,
+            topics: preferenceKeys,
+            delta: hideRate * levelFactor
+        )
     }
 
     func recordMoreLike(card: ArticleCard, level: PersonalizationLevel) throws {
         let levelFactor = config.personalization.levels[level.rawValue] ?? 0.0
         guard levelFactor > 0 else { return }
 
+        let preferenceKeys = CardKeywords.preferenceKeys(
+            title: card.title,
+            summary: card.summary,
+            topicKey: card.topicKey,
+            maxKeys: 10
+        )
         let likeRate = config.personalization.learningRates["like"]
             ?? config.personalization.learningRates["bookmark"]
             ?? 0.7
-        try updateAffinity(language: card.lang, topic: card.topicKey, delta: likeRate * levelFactor)
+        try updateAffinities(
+            language: card.lang,
+            topics: preferenceKeys,
+            delta: likeRate * levelFactor
+        )
     }
 
     func toggleBookmark(pageId: Int64) throws -> Bool {
@@ -220,5 +256,27 @@ final class WikiRepository {
         let maxClamp = config.personalization.topicClamp.max
         let next = max(minClamp, min(maxClamp, current + boundedDelta))
         try store.upsertTopicAffinity(language: language, topicKey: topic, score: next)
+    }
+
+    private func updateAffinities(language: String, topics: [String], delta: Double) throws {
+        let uniqueTopics = Array(
+            Set(
+                topics
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+                    .filter { !$0.isEmpty }
+            )
+        ).prefix(10)
+        guard !uniqueTopics.isEmpty else { return }
+
+        let topicsArray = Array(uniqueTopics)
+        let primary = topicsArray.first!
+        let secondary = Array(topicsArray.dropFirst())
+        let primaryDelta = delta * 0.55
+        let secondaryDelta = secondary.isEmpty ? 0 : (delta * 0.45 / Double(secondary.count))
+
+        try updateAffinity(language: language, topic: primary, delta: primaryDelta)
+        for topic in secondary {
+            try updateAffinity(language: language, topic: topic, delta: secondaryDelta)
+        }
     }
 }

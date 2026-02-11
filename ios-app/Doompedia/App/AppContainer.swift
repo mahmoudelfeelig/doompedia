@@ -8,6 +8,9 @@ final class AppContainer: ObservableObject {
     let wikipediaAPIClient: WikipediaAPIClient
 
     init() throws {
+        URLCache.shared.memoryCapacity = 256 * 1024 * 1024
+        URLCache.shared.diskCapacity = 3 * 1024 * 1024 * 1024
+
         let config = try RankingConfigLoader.load()
         let store = try SQLiteStore()
         let repository = WikiRepository(store: store, config: config)

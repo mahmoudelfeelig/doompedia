@@ -77,11 +77,34 @@ struct PacksView: View {
                     }
                     .disabled(viewModel.isUpdatingPack)
 
+                    Toggle("Download preview images (10% sample)", isOn: Binding(
+                        get: { viewModel.settings.downloadPreviewImages },
+                        set: { viewModel.setDownloadPreviewImages($0) }
+                    ))
+
                     Text("Installed pack version: \(viewModel.settings.installedPackVersion)")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                    if let progress = viewModel.updateProgress {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("\(progress.phase) \(progress.detail)".trimmingCharacters(in: .whitespaces))
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            ProgressView(value: progress.percent / 100.0)
+                            let bytesText: String = {
+                                if progress.totalBytes > 0 {
+                                    return "\(formatBytes(progress.downloadedBytes)) / \(formatBytes(progress.totalBytes))"
+                                }
+                                return formatBytes(progress.downloadedBytes)
+                            }()
+                            let speedText = progress.bytesPerSecond > 0 ? " • \(formatBytes(progress.bytesPerSecond))/s" : ""
+                            Text(String(format: "%.1f%% • %@", progress.percent, bytesText) + speedText)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                     if !viewModel.settings.lastUpdateISO.isEmpty {
-                        Text("Last checked at: \(viewModel.settings.lastUpdateISO)")
+                        Text("Last checked: \(friendlyUpdateDate(viewModel.settings.lastUpdateISO))")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
                     }
@@ -105,4 +128,22 @@ struct PacksView: View {
             }
         }
     }
+}
+
+private func friendlyUpdateDate(_ iso: String) -> String {
+    guard let date = ISO8601DateFormatter().date(from: iso) else { return iso }
+    let formatter = DateFormatter()
+    formatter.locale = Locale.current
+    formatter.dateStyle = .medium
+    formatter.timeStyle = .short
+    return formatter.string(from: date)
+}
+
+private func formatBytes(_ bytes: Int64) -> String {
+    if bytes <= 0 { return "0 B" }
+    let kb = Double(bytes) / 1024.0
+    if kb < 1024.0 { return String(format: "%.0f KB", kb) }
+    let mb = kb / 1024.0
+    if mb < 1024.0 { return String(format: "%.1f MB", mb) }
+    return String(format: "%.2f GB", mb / 1024.0)
 }

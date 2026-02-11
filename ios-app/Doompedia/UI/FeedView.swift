@@ -4,7 +4,6 @@ private enum FeedSortOption: String, CaseIterable {
     case recommended = "Recommended"
     case titleAsc = "A-Z"
     case titleDesc = "Z-A"
-    case quality = "Quality"
 }
 
 struct FeedView: View {
@@ -16,6 +15,8 @@ struct FeedView: View {
     @State private var selectedSort: FeedSortOption = .recommended
     @State private var selectedFilter: String = "All"
     @State private var didInitialRefresh = false
+    @State private var isAtTop = true
+    @State private var listResetToken = 0
 
     private var items: [RankedCard] {
         if viewModel.query.isEmpty {
@@ -47,8 +48,6 @@ struct FeedView: View {
             return filtered.sorted { $0.card.title.localizedCaseInsensitiveCompare($1.card.title) == .orderedAscending }
         case .titleDesc:
             return filtered.sorted { $0.card.title.localizedCaseInsensitiveCompare($1.card.title) == .orderedDescending }
-        case .quality:
-            return filtered.sorted { $0.card.qualityScore > $1.card.qualityScore }
         }
     }
 
@@ -93,6 +92,16 @@ struct FeedView: View {
 
                 List(visibleItems) { ranked in
                     VStack(alignment: .leading, spacing: 10) {
+                        if viewModel.settings.downloadPreviewImages, shouldShowImage(for: ranked.card) {
+                            RemoteArticleImage(
+                                card: ranked.card,
+                                viewModel: viewModel
+                            )
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 180)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+
                         HStack(alignment: .top, spacing: 8) {
                             Text(ranked.card.title)
                                 .font(.headline)
@@ -133,32 +142,47 @@ struct FeedView: View {
 
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
-                                Button(ranked.card.bookmarked ? "Saved" : "Save") {
+                                Button {
                                     Task { await viewModel.showFolderPicker(for: ranked.card) }
+                                } label: {
+                                    Image(systemName: ranked.card.bookmarked ? "bookmark.fill" : "bookmark")
                                 }
                                 .buttonStyle(.bordered)
+                                .labelStyle(.iconOnly)
+                                .accessibilityLabel(ranked.card.bookmarked ? "Saved to folders" : "Save to folders")
 
-                                Button("Show more") {
+                                Button {
                                     Task { await viewModel.moreLike(ranked.card) }
+                                } label: {
+                                    Image(systemName: "hand.thumbsup")
                                 }
                                 .buttonStyle(.bordered)
+                                .labelStyle(.iconOnly)
+                                .accessibilityLabel("Like this type of article")
 
-                                Button("Show less") {
+                                Button {
                                     Task { await viewModel.lessLike(ranked.card) }
+                                } label: {
+                                    Image(systemName: "hand.thumbsdown")
                                 }
                                 .buttonStyle(.bordered)
-
-                                if ranked.card.bookmarked {
-                                    Button("Unsave") {
-                                        Task { await viewModel.toggleBookmark(ranked.card) }
-                                    }
-                                    .buttonStyle(.bordered)
-                                }
+                                .labelStyle(.iconOnly)
+                                .accessibilityLabel("Dislike this type of article")
                             }
                         }
                     }
                     .padding(.vertical, 6)
                     .contentShape(Rectangle())
+                    .onAppear {
+                        if ranked.id == visibleItems.first?.id {
+                            isAtTop = true
+                        }
+                    }
+                    .onDisappear {
+                        if ranked.id == visibleItems.first?.id {
+                            isAtTop = false
+                        }
+                    }
                     .onTapGesture {
                         Task {
                             let shouldOpen = await viewModel.openCard(ranked.card)
@@ -168,12 +192,21 @@ struct FeedView: View {
                         }
                     }
                 }
+                .id(listResetToken)
                 .listStyle(.plain)
                 .refreshable {
-                    await viewModel.refreshFeed()
+                    await viewModel.refreshFeed(manual: true)
                 }
             }
             .navigationTitle("Doompedia")
+            .onChange(of: viewModel.exploreReselectToken) { _, _ in
+                if isAtTop {
+                    Task { await viewModel.refreshFeed(manual: true) }
+                } else {
+                    listResetToken += 1
+                    isAtTop = true
+                }
+            }
             .onAppear {
                 guard !didInitialRefresh else { return }
                 didInitialRefresh = true
@@ -229,51 +262,53 @@ struct FolderPickerSheet: View {
 }
 
 private func buildTags(for card: ArticleCard) -> [String] {
-    let text = "\(card.title) \(card.summary)".lowercased()
-    var tags = OrderedSet<String>()
-    tags.append(prettyTopic(card.topicKey))
-
-    let rules: [(String, [String])] = [
-        ("Biography", ["born", "died", "actor", "author", "scientist", "politician"]),
-        ("Science", ["physics", "chemistry", "biology", "mathematics", "astronomy"]),
-        ("Technology", ["software", "computer", "internet", "digital", "algorithm"]),
-        ("History", ["war", "empire", "century", "historical", "revolution"]),
-        ("Geography", ["city", "country", "region", "river", "mountain", "capital"]),
-        ("Politics", ["government", "election", "parliament", "policy", "minister"]),
-        ("Culture", ["music", "film", "literature", "art", "religion", "language"]),
-        ("Economics", ["economy", "finance", "market", "trade", "industry"]),
-        ("Health", ["medicine", "disease", "medical", "health", "hospital"]),
-    ]
-
-    for (tag, keywords) in rules where keywords.contains(where: { text.contains($0) }) {
-        tags.append(tag)
+    var tags = CardKeywords.displayTags(
+        title: card.title,
+        summary: card.summary,
+        topicKey: card.topicKey,
+        bookmarked: card.bookmarked,
+        maxTags: 6
+    )
+    if card.updatedAt.hasPrefix("1970-") {
+        tags.append("Offline Pack")
+    } else {
+        tags.append("Live Cache")
     }
-    if card.title.localizedCaseInsensitiveContains("list of") { tags.append("Lists") }
-    if card.title.localizedCaseInsensitiveContains("university") { tags.append("Education") }
-    if card.bookmarked { tags.append("Saved") }
-
     return Array(tags.prefix(6))
 }
 
-private struct OrderedSet<Element: Hashable> {
-    private var seen = Set<Element>()
-    private(set) var ordered: [Element] = []
-
-    mutating func append(_ value: Element) {
-        guard seen.insert(value).inserted else { return }
-        ordered.append(value)
-    }
-
-    func prefix(_ maxLength: Int) -> ArraySlice<Element> {
-        ordered.prefix(maxLength)
-    }
+private func shouldShowImage(for card: ArticleCard) -> Bool {
+    return abs(card.pageId) % 10 == 0
 }
 
-private func prettyTopic(_ raw: String) -> String {
-    let normalized = raw
-        .replacingOccurrences(of: "-", with: " ")
-        .replacingOccurrences(of: "_", with: " ")
-        .trimmingCharacters(in: .whitespacesAndNewlines)
-    if normalized.isEmpty { return "General" }
-    return normalized.capitalized
+private struct RemoteArticleImage: View {
+    let card: ArticleCard
+    @ObservedObject var viewModel: MainViewModel
+    @State private var imageURL: String?
+
+    var body: some View {
+        Group {
+            if let imageURL, let url = URL(string: imageURL) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .empty:
+                        ProgressView()
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    case .failure:
+                        EmptyView()
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
+            } else {
+                EmptyView()
+            }
+        }
+        .task(id: card.pageId) {
+            imageURL = await viewModel.resolveThumbnailURL(for: card)
+        }
+    }
 }
