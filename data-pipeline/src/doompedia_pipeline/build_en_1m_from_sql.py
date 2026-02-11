@@ -350,7 +350,7 @@ def build_cards(
     language: str,
     target: int,
     oversample: float,
-    progress_every: int,
+    progress_every: int = 0,
 ) -> dict[str, int]:
     candidates = collect_candidate_pages(
         page_sql_gz=page_sql_gz,

@@ -14,7 +14,12 @@ final class AppContainer: ObservableObject {
         let config = try RankingConfigLoader.load()
         let store = try SQLiteStore()
         let repository = WikiRepository(store: store, config: config)
-        try repository.bootstrap()
+        do {
+            try repository.bootstrap()
+        } catch {
+            // Keep app startup resilient if bundled seed schema drifts.
+            try store.ensureSaveDefaults()
+        }
         let installer = PackInstaller(store: store)
         let deltaApplier = DeltaApplier(store: store)
         let downloader = ShardDownloader()

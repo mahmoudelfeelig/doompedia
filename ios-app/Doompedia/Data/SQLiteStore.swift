@@ -7,7 +7,7 @@ enum SQLiteStoreError: Error {
     case execute(String)
 }
 
-struct SeedRow: Codable {
+struct SeedRow: Decodable {
     let page_id: Int64
     let lang: String
     let title: String
@@ -19,6 +19,126 @@ struct SeedRow: Codable {
     let source_rev_id: Int64?
     let updated_at: String
     let aliases: [String]
+
+    init(
+        page_id: Int64,
+        lang: String,
+        title: String,
+        summary: String,
+        wiki_url: String,
+        topic_key: String,
+        quality_score: Double,
+        is_disambiguation: Bool,
+        source_rev_id: Int64?,
+        updated_at: String,
+        aliases: [String]
+    ) {
+        self.page_id = page_id
+        self.lang = lang
+        self.title = title
+        self.summary = summary
+        self.wiki_url = wiki_url
+        self.topic_key = topic_key
+        self.quality_score = quality_score
+        self.is_disambiguation = is_disambiguation
+        self.source_rev_id = source_rev_id
+        self.updated_at = updated_at
+        self.aliases = aliases
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case page_id
+        case lang
+        case title
+        case summary
+        case wiki_url
+        case topic_key
+        case quality_score
+        case is_disambiguation
+        case source_rev_id
+        case updated_at
+        case aliases
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        page_id = try SeedRow.decodeFlexibleInt64(container, forKey: .page_id)
+        lang = try container.decodeIfPresent(String.self, forKey: .lang) ?? "en"
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        summary = try container.decodeIfPresent(String.self, forKey: .summary) ?? ""
+        wiki_url = try container.decodeIfPresent(String.self, forKey: .wiki_url) ?? ""
+        topic_key = try container.decodeIfPresent(String.self, forKey: .topic_key) ?? "general"
+        quality_score = try SeedRow.decodeFlexibleDouble(container, forKey: .quality_score) ?? 0
+        is_disambiguation = try SeedRow.decodeFlexibleBool(container, forKey: .is_disambiguation) ?? false
+        source_rev_id = try SeedRow.decodeFlexibleInt64IfPresent(container, forKey: .source_rev_id)
+        updated_at = try container.decodeIfPresent(String.self, forKey: .updated_at) ?? "1970-01-01T00:00:00Z"
+        aliases = try container.decodeIfPresent([String].self, forKey: .aliases) ?? []
+    }
+
+    private static func decodeFlexibleBool(
+        _ container: KeyedDecodingContainer<CodingKeys>,
+        forKey key: CodingKeys
+    ) throws -> Bool? {
+        if let boolValue = try container.decodeIfPresent(Bool.self, forKey: key) {
+            return boolValue
+        }
+        if let intValue = try container.decodeIfPresent(Int.self, forKey: key) {
+            return intValue != 0
+        }
+        if let textValue = try container.decodeIfPresent(String.self, forKey: key) {
+            switch textValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "1", "true", "yes", "y": return true
+            case "0", "false", "no", "n": return false
+            default: return nil
+            }
+        }
+        return nil
+    }
+
+    private static func decodeFlexibleDouble(
+        _ container: KeyedDecodingContainer<CodingKeys>,
+        forKey key: CodingKeys
+    ) throws -> Double? {
+        if let value = try container.decodeIfPresent(Double.self, forKey: key) {
+            return value
+        }
+        if let intValue = try container.decodeIfPresent(Int.self, forKey: key) {
+            return Double(intValue)
+        }
+        if let textValue = try container.decodeIfPresent(String.self, forKey: key) {
+            return Double(textValue)
+        }
+        return nil
+    }
+
+    private static func decodeFlexibleInt64(
+        _ container: KeyedDecodingContainer<CodingKeys>,
+        forKey key: CodingKeys
+    ) throws -> Int64 {
+        if let value = try decodeFlexibleInt64IfPresent(container, forKey: key) {
+            return value
+        }
+        throw DecodingError.keyNotFound(
+            key,
+            DecodingError.Context(codingPath: container.codingPath, debugDescription: "Missing required Int64 field")
+        )
+    }
+
+    private static func decodeFlexibleInt64IfPresent(
+        _ container: KeyedDecodingContainer<CodingKeys>,
+        forKey key: CodingKeys
+    ) throws -> Int64? {
+        if let value = try container.decodeIfPresent(Int64.self, forKey: key) {
+            return value
+        }
+        if let intValue = try container.decodeIfPresent(Int.self, forKey: key) {
+            return Int64(intValue)
+        }
+        if let textValue = try container.decodeIfPresent(String.self, forKey: key) {
+            return Int64(textValue)
+        }
+        return nil
+    }
 }
 
 final class SQLiteStore {
