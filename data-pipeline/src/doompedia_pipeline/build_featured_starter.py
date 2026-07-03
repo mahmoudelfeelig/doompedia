@@ -24,6 +24,7 @@ from typing import Any
 API_URL = "https://en.wikipedia.org/w/api.php"
 VITAL_ARTICLES_PAGE = "Wikipedia:Vital articles/Level/3"
 VITAL_ARTICLES_FALLBACK_PAGE = "Wikipedia:Vital articles/Level/4"
+VITAL_ARTICLES_DEEP_FALLBACK_PAGE = "Wikipedia:Vital articles/Level/5"
 USER_AGENT = "Doompedia/0.1 (+https://github.com/mahmoudelfeelig/doompedia)"
 MAX_THUMBNAIL_BYTES = 1_500_000
 DOWNLOAD_INTERVAL_SECONDS = 0.4
@@ -133,14 +134,16 @@ def vital_article_titles(page: str) -> list[str]:
     )
 
 
-def fallback_vital_titles() -> list[str]:
+def fallback_vital_titles(page: str) -> list[str]:
+    level_match = re.search(r"/Level/(\d+)$", page)
+    level = level_match.group(1) if level_match else ""
     subpages = {
         link["title"]
-        for link in page_links(VITAL_ARTICLES_FALLBACK_PAGE)
+        for link in page_links(page)
         if link.get("ns") == 4
         and (
-            link.get("title", "").startswith("Wikipedia:Vital articles/Level/4/")
-            or link.get("title", "").startswith("Wikipedia:Vital articles/Level 4/")
+            link.get("title", "").startswith(f"Wikipedia:Vital articles/Level/{level}/")
+            or link.get("title", "").startswith(f"Wikipedia:Vital articles/Level {level}/")
         )
     }
     titles: set[str] = set()
@@ -150,6 +153,19 @@ def fallback_vital_titles() -> list[str]:
         titles,
         key=lambda title: hashlib.sha256(title.encode("utf-8")).digest(),
     )
+
+
+def unique_titles(*title_groups: list[str]) -> list[str]:
+    seen: set[str] = set()
+    merged: list[str] = []
+    for group in title_groups:
+        for title in group:
+            normalized = title.casefold()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            merged.append(title)
+    return merged
 
 
 def fetch_articles(titles: list[str], stop_after: int | None = None) -> list[FeaturedArticle]:
@@ -334,20 +350,16 @@ def build_pack(
     thumbnail_dir.mkdir(parents=True, exist_ok=True)
 
     primary_titles = vital_article_titles(VITAL_ARTICLES_PAGE)
-    candidates = fetch_articles(primary_titles)
-    candidate_target = min(count + 75, 1000)
-    if len(candidates) < candidate_target:
-        primary_title_set = set(primary_titles)
-        fallback_titles = [
-            title
-            for title in fallback_vital_titles()
-            if title not in primary_title_set
-        ]
-        needed = candidate_target - len(candidates)
-        candidates.extend(fetch_articles(fallback_titles, stop_after=needed)[:needed])
-    candidates = candidates[:candidate_target]
+    level_four_titles = fallback_vital_titles(VITAL_ARTICLES_FALLBACK_PAGE)
+    level_five_titles = fallback_vital_titles(VITAL_ARTICLES_DEEP_FALLBACK_PAGE)
+    candidate_target = max(count + 250, int(count * 1.35))
+    all_titles = unique_titles(primary_titles, level_four_titles, level_five_titles)
+    candidates = fetch_articles(all_titles, stop_after=candidate_target)[:candidate_target]
     if len(candidates) < count:
-        raise RuntimeError(f"Only {len(candidates)} vital articles supplied free thumbnails")
+        raise RuntimeError(
+            f"Only {len(candidates)} vital articles supplied free thumbnails "
+            f"from {len(all_titles)} candidate titles"
+        )
 
     image_metadata = fetch_image_metadata([article.image_title for article in candidates])
     candidates = [
@@ -437,7 +449,10 @@ def build_pack(
                 "width": 512,
                 "public_base_url": public_base_url.rstrip("/"),
                 "generated_at": generated_at,
-                "selection_source": f"{VITAL_ARTICLES_PAGE}; {VITAL_ARTICLES_FALLBACK_PAGE}",
+                "selection_source": (
+                    f"{VITAL_ARTICLES_PAGE}; {VITAL_ARTICLES_FALLBACK_PAGE}; "
+                    f"{VITAL_ARTICLES_DEEP_FALLBACK_PAGE}"
+                ),
                 "articles": manifest_rows,
             },
             indent=2,
@@ -480,8 +495,8 @@ def main() -> None:
     )
     parser.add_argument("--count", type=int, default=500)
     args = parser.parse_args()
-    if not 1 <= args.count <= 1000:
-        parser.error("--count must be between 1 and 1000")
+    if not 1 <= args.count <= 50_000:
+        parser.error("--count must be between 1 and 50000")
     build_pack(
         output_assets=args.output_assets.resolve(),
         output_media=args.output_media.resolve(),
