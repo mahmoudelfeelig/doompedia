@@ -4,13 +4,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import android.graphics.Color as AndroidColor
 
-val LightPrimary = Color(0xFF004D3D)
-val LightSecondary = Color(0xFF44665D)
-val LightBackground = Color(0xFFF7FAF8)
+val LightPrimary = Color(0xFF0B5C4A)
+val LightSecondary = Color(0xFF5B665F)
+val LightBackground = Color(0xFFF5F7F3)
+val LightSurface = Color(0xFFFFFFFF)
 
-val DarkPrimary = Color(0xFF7ED8BE)
-val DarkSecondary = Color(0xFFA5CCC2)
-val DarkBackground = Color(0xFF0D1714)
+val DarkPrimary = Color(0xFF8CDCC2)
+val DarkSecondary = Color(0xFFAAB8B0)
+val DarkBackground = Color(0xFF111511)
+val DarkSurface = Color(0xFF191F1A)
 
 fun parseHexColor(hex: String, fallback: Color): Color {
     val value = hex.trim()

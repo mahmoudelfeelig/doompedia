@@ -11,12 +11,22 @@ private val LightColors = lightColorScheme(
     primary = LightPrimary,
     secondary = LightSecondary,
     background = LightBackground,
+    surface = LightSurface,
+    surfaceVariant = Color(0xFFE6ECE7),
+    onBackground = Color(0xFF17211B),
+    onSurface = Color(0xFF17211B),
+    onSurfaceVariant = Color(0xFF54615A),
 )
 
 private val DarkColors = darkColorScheme(
     primary = DarkPrimary,
     secondary = DarkSecondary,
     background = DarkBackground,
+    surface = DarkSurface,
+    surfaceVariant = Color(0xFF283029),
+    onBackground = Color(0xFFE8EEE9),
+    onSurface = Color(0xFFE8EEE9),
+    onSurfaceVariant = Color(0xFFBBC7BF),
 )
 
 @Composable
@@ -30,7 +40,7 @@ fun DoompediaTheme(
     val darkTheme = forceDark ?: isSystemInDarkTheme()
     val baseScheme = if (darkTheme) DarkColors else LightColors
     val fallbackAccent = if (darkTheme) DarkPrimary else LightPrimary
-    val accent = parseHexColor(accentHex, fallbackAccent)
+    val accent = parseHexColor(accentHex.ifBlank { "#0B5C4A" }, fallbackAccent)
     val accentedScheme = baseScheme.copy(
         primary = accent,
         secondary = softenedColor(accent, baseScheme.background),

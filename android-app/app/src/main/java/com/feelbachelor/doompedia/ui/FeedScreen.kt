@@ -32,6 +32,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -189,25 +190,37 @@ fun FeedScreen(
     Column(
         modifier = Modifier
             .padding(paddingValues)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Explore",
+                style = MaterialTheme.typography.headlineMedium,
+            )
+            Text(
+                text = "${activeCards.size.coerceAtMost(cards.size)} cards ready",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
         OutlinedTextField(
             value = state.query,
             onValueChange = onQueryChange,
             modifier = Modifier.fillMaxWidth(),
-            label = { Text("Search title") },
-            placeholder = { Text("Try: Alan Turing") },
+            label = { Text("Search") },
+            placeholder = { Text("Article title") },
             singleLine = true,
         )
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
+        FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Box {
                 OutlinedButton(onClick = { showSortMenu = true }) {
-                    Text("Sort: ${selectedSort.label}")
+                    Text(selectedSort.label)
                 }
                 DropdownMenu(
                     expanded = showSortMenu,
@@ -230,13 +243,7 @@ fun FeedScreen(
                     onClick = { showFilterMenu = true },
                     enabled = availableFilters.isNotEmpty(),
                 ) {
-                    Text(
-                        if (selectedFilter == "All") {
-                            "Filter: All"
-                        } else {
-                            "Filter: $selectedFilter"
-                        },
-                    )
+                    Text(selectedFilter)
                 }
                 DropdownMenu(
                     expanded = showFilterMenu,
@@ -259,6 +266,14 @@ fun FeedScreen(
                         )
                     }
                 }
+            }
+
+            availableFilters.take(5).forEach { filter ->
+                FilterChip(
+                    selected = selectedFilter == filter,
+                    onClick = { selectedFilter = if (selectedFilter == filter) "All" else filter },
+                    label = { Text(filter) },
+                )
             }
         }
 
@@ -417,7 +432,7 @@ private fun ArticleCardItem(
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             if (thumbnailUrl != null) {
                 AsyncImage(
@@ -425,7 +440,7 @@ private fun ArticleCardItem(
                     contentDescription = "Article preview image",
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
+                        .aspectRatio(4f / 5f)
                         .clip(MaterialTheme.shapes.medium),
                     contentScale = ContentScale.Crop,
                 )
@@ -439,7 +454,7 @@ private fun ArticleCardItem(
                 Text(
                     text = card.title,
                     modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.headlineSmall,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -466,6 +481,8 @@ private fun ArticleCardItem(
             Text(
                 text = card.summary,
                 style = MaterialTheme.typography.bodyLarge,
+                maxLines = 5,
+                overflow = TextOverflow.Ellipsis,
             )
 
             FlowRow(
@@ -500,8 +517,7 @@ private fun ArticleCardItem(
             title = { Text("Why this is shown") },
             text = {
                 Text(
-                    "This card is selected using your personalization level, "
-                        + "topic diversity guardrails, and controlled exploration.\n\n${item.why}",
+                    item.why,
                     style = MaterialTheme.typography.bodyMedium,
                 )
             },

@@ -1,17 +1,17 @@
 package com.feelbachelor.doompedia.ui
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -33,6 +33,7 @@ import com.feelbachelor.doompedia.data.repo.WikiRepository
 import com.feelbachelor.doompedia.domain.ArticleCard
 import com.feelbachelor.doompedia.domain.ReadSort
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SavedScreen(
     paddingValues: PaddingValues,
@@ -50,7 +51,6 @@ fun SavedScreen(
     onUnsaveFromSelectedFolder: (ArticleCard) -> Unit,
 ) {
     var newFolderName by remember { mutableStateOf("") }
-    var importDraft by remember { mutableStateOf("") }
     val selectedFolder = state.folders.firstOrNull { it.folderId == state.selectedFolderId }
     val isReadFolder = selectedFolder?.folderId == WikiRepository.DEFAULT_READ_FOLDER_ID
 
@@ -62,16 +62,23 @@ fun SavedScreen(
         contentPadding = PaddingValues(bottom = 120.dp),
     ) {
         item {
-            Text(
-                text = "Saved",
-                style = MaterialTheme.typography.headlineSmall,
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Saved",
+                    style = MaterialTheme.typography.headlineMedium,
+                )
+                Text(
+                    text = "Keep articles for later and organize the ones worth returning to.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         item {
             Card {
                 Column(
-                    modifier = Modifier.padding(14.dp),
+                    modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Text(
@@ -101,41 +108,19 @@ fun SavedScreen(
                             Text("Add")
                         }
                     }
-                    Row(
-                        modifier = Modifier
-                            .horizontalScroll(rememberScrollState()),
+                    androidx.compose.foundation.layout.FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         state.folders.forEach { folder ->
-                            AssistChip(
+                            FilterChip(
+                                selected = folder.folderId == state.selectedFolderId,
                                 onClick = { onSelectFolder(folder.folderId) },
                                 label = {
-                                    val marker = if (folder.folderId == state.selectedFolderId) "• " else ""
-                                    Text("$marker${folder.name} (${folder.articleCount})")
+                                    Text("${folder.name} (${folder.articleCount})")
                                 },
                             )
                         }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = onRefreshSaved) { Text("Refresh") }
-                        OutlinedButton(onClick = onExportSelectedFolder) { Text("Export selected") }
-                        OutlinedButton(onClick = onExportAllFolders) { Text("Export all") }
-                    }
-                    OutlinedTextField(
-                        modifier = Modifier.fillMaxWidth(),
-                        value = importDraft,
-                        onValueChange = { importDraft = it },
-                        label = { Text("Import folders JSON") },
-                        placeholder = { Text("{\"folders\":[...]}") },
-                    )
-                    OutlinedButton(
-                        onClick = {
-                            onImportFolders(importDraft)
-                            importDraft = ""
-                        },
-                        enabled = importDraft.isNotBlank(),
-                    ) {
-                        Text("Import folders")
                     }
                 }
             }
@@ -144,13 +129,15 @@ fun SavedScreen(
         if (isReadFolder) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AssistChip(
+                    FilterChip(
+                        selected = state.settings.readSort == ReadSort.NEWEST_FIRST,
                         onClick = { onSetReadSort(ReadSort.NEWEST_FIRST) },
-                        label = { Text(if (state.settings.readSort == ReadSort.NEWEST_FIRST) "• Latest" else "Latest") },
+                        label = { Text("Latest") },
                     )
-                    AssistChip(
+                    FilterChip(
+                        selected = state.settings.readSort == ReadSort.OLDEST_FIRST,
                         onClick = { onSetReadSort(ReadSort.OLDEST_FIRST) },
-                        label = { Text(if (state.settings.readSort == ReadSort.OLDEST_FIRST) "• Earliest" else "Earliest") },
+                        label = { Text("Earliest") },
                     )
                 }
             }
@@ -169,7 +156,7 @@ fun SavedScreen(
         item {
             Text(
                 text = selectedFolder?.name ?: "Saved articles",
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
             )
         }
 
@@ -192,7 +179,7 @@ fun SavedScreen(
                 modifier = Modifier.clickable { onOpenCard(card) },
             ) {
                 Column(
-                    modifier = Modifier.padding(14.dp),
+                    modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(
@@ -204,6 +191,8 @@ fun SavedScreen(
                     Text(
                         text = card.summary,
                         style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 4,
+                        overflow = TextOverflow.Ellipsis,
                     )
                     if (!isReadFolder) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
