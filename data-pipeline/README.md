@@ -113,6 +113,27 @@ The delta format is NDJSON operations:
 - `{"op": "upsert", "record": {...}}`
 - `{"op": "delete", "page_id": 123}`
 
+## Build the featured starter pack
+
+The Android app can bundle 500 freely licensed, 512 px lead thumbnails from
+Wikipedia's Level 3 Vital Articles list. The generator also replaces the
+starter card seed and records image source, license, credit, checksum, and
+attribution metadata.
+
+```bash
+cd data-pipeline
+python -m doompedia_pipeline.build_featured_starter \
+  --count 500 \
+  --output-assets ../android-app/app/src/main/assets \
+  --output-media ../web/media/featured \
+  --output-web-content ../web/content \
+  --public-base-url https://doompedia.elfeel.me/media/featured
+```
+
+Only the card and attribution manifests are bundled in Android. The image
+files are published with the website and cached on demand by the app, avoiding
+roughly 100 MB of additional APK size.
+
 ## Notes
 - Normalization and summary filtering align with `shared-spec` decisions.
 - Default compression is `none` for broad mobile runtime compatibility.
