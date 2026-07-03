@@ -187,155 +187,151 @@ fun FeedScreen(
         onRefresh = ::requestRefreshAndResetTop,
     )
 
-    Column(
+    Box(
         modifier = Modifier
             .padding(paddingValues)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .pullRefresh(pullRefreshState),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                text = "Explore",
-                style = MaterialTheme.typography.headlineMedium,
-            )
-            Text(
-                text = "${activeCards.size.coerceAtMost(cards.size)} cards ready",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        OutlinedTextField(
-            value = state.query,
-            onValueChange = onQueryChange,
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("Search") },
-            placeholder = { Text("Article title") },
-            singleLine = true,
-        )
-
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+        LazyColumn(
+            state = listState,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(bottom = 120.dp),
         ) {
-            Box {
-                OutlinedButton(onClick = { showSortMenu = true }) {
-                    Text(selectedSort.label)
-                }
-                DropdownMenu(
-                    expanded = showSortMenu,
-                    onDismissRequest = { showSortMenu = false },
-                ) {
-                    FeedSortOption.entries.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(option.label) },
-                            onClick = {
-                                selectedSort = option
-                                showSortMenu = false
-                            },
-                        )
-                    }
-                }
-            }
-
-            Box {
-                OutlinedButton(
-                    onClick = { showFilterMenu = true },
-                    enabled = availableFilters.isNotEmpty(),
-                ) {
-                    Text(selectedFilter)
-                }
-                DropdownMenu(
-                    expanded = showFilterMenu,
-                    onDismissRequest = { showFilterMenu = false },
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("All") },
-                        onClick = {
-                            selectedFilter = "All"
-                            showFilterMenu = false
-                        },
+            item(key = "feed_controls") {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "Explore",
+                        style = MaterialTheme.typography.headlineMedium,
                     )
-                    availableFilters.forEach { filter ->
-                        DropdownMenuItem(
-                            text = { Text(filter) },
-                            onClick = {
-                                selectedFilter = filter
-                                showFilterMenu = false
-                            },
-                        )
-                    }
-                }
-            }
 
-            availableFilters.take(5).forEach { filter ->
-                FilterChip(
-                    selected = selectedFilter == filter,
-                    onClick = { selectedFilter = if (selectedFilter == filter) "All" else filter },
-                    label = { Text(filter) },
-                )
-            }
-        }
-
-        if (state.loading) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                CircularProgressIndicator()
-            }
-        }
-
-        state.error?.let { message ->
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .pullRefresh(pullRefreshState),
-        ) {
-            LazyColumn(
-                state = listState,
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(bottom = 120.dp),
-            ) {
-                items(activeCards, key = { it.card.pageId }) { item ->
-                    ArticleCardItem(
-                        item = item,
-                        onOpenCard = onOpenCard,
-                        onMoreLike = onMoreLike,
-                        onLessLike = onLessLike,
-                        onShowFolderPicker = onShowFolderPicker,
-                        onResolveThumbnailUrl = onResolveThumbnailUrl,
-                        downloadPreviewImages = downloadPreviewImages,
+                    OutlinedTextField(
+                        value = state.query,
+                        onValueChange = onQueryChange,
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Search") },
+                        placeholder = { Text("Article title") },
+                        singleLine = true,
                     )
-                }
-                if (state.loadingMoreFeed) {
-                    item(key = "feed_loading_more") {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 12.dp),
-                            horizontalArrangement = Arrangement.Center,
-                        ) {
-                            CircularProgressIndicator()
+
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Box {
+                            OutlinedButton(onClick = { showSortMenu = true }) {
+                                Text(selectedSort.label)
+                            }
+                            DropdownMenu(
+                                expanded = showSortMenu,
+                                onDismissRequest = { showSortMenu = false },
+                            ) {
+                                FeedSortOption.entries.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = { Text(option.label) },
+                                        onClick = {
+                                            selectedSort = option
+                                            showSortMenu = false
+                                        },
+                                    )
+                                }
+                            }
+                        }
+
+                        Box {
+                            OutlinedButton(
+                                onClick = { showFilterMenu = true },
+                                enabled = availableFilters.isNotEmpty(),
+                            ) {
+                                Text(selectedFilter)
+                            }
+                            DropdownMenu(
+                                expanded = showFilterMenu,
+                                onDismissRequest = { showFilterMenu = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("All") },
+                                    onClick = {
+                                        selectedFilter = "All"
+                                        showFilterMenu = false
+                                    },
+                                )
+                                availableFilters.forEach { filter ->
+                                    DropdownMenuItem(
+                                        text = { Text(filter) },
+                                        onClick = {
+                                            selectedFilter = filter
+                                            showFilterMenu = false
+                                        },
+                                    )
+                                }
+                            }
+                        }
+
+                        availableFilters.take(5).forEach { filter ->
+                            FilterChip(
+                                selected = selectedFilter == filter,
+                                onClick = { selectedFilter = if (selectedFilter == filter) "All" else filter },
+                                label = { Text(filter) },
+                            )
                         }
                     }
                 }
             }
-            PullRefreshIndicator(
-                refreshing = state.loading,
-                state = pullRefreshState,
-                modifier = Modifier.align(Alignment.TopCenter),
-            )
+
+            if (state.loading) {
+                item(key = "feed_loading") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+            }
+
+            state.error?.let { message ->
+                item(key = "feed_error") {
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+
+            items(activeCards, key = { it.card.pageId }) { item ->
+                ArticleCardItem(
+                    item = item,
+                    onOpenCard = onOpenCard,
+                    onMoreLike = onMoreLike,
+                    onLessLike = onLessLike,
+                    onShowFolderPicker = onShowFolderPicker,
+                    onResolveThumbnailUrl = onResolveThumbnailUrl,
+                    downloadPreviewImages = downloadPreviewImages,
+                )
+            }
+            if (state.loadingMoreFeed) {
+                item(key = "feed_loading_more") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+            }
         }
+        PullRefreshIndicator(
+            refreshing = state.loading,
+            state = pullRefreshState,
+            modifier = Modifier.align(Alignment.TopCenter),
+        )
     }
 
     state.folderPicker?.let { picker ->
