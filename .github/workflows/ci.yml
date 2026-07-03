@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: doompedia-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   pipeline-tests:
     runs-on: ubuntu-latest
@@ -72,3 +76,105 @@ jobs:
             -destination "$IOS_SIM_DEST" \
             CODE_SIGNING_ALLOWED=NO \
             test
+
+  deploy-web:
+    name: Deploy website to Hetzner
+    runs-on: ubuntu-latest
+    needs:
+      - pipeline-tests
+      - android-unit
+      - ios-build
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate website files
+        run: |
+          set -euo pipefail
+          node --check web/app.js
+          test -f web/index.html
+          test -f web/styles.css
+          test -f deploy/docker-compose.prod.yml
+          test -f deploy/Caddyfile
+          test -f deploy/Caddyfile.public
+
+      - name: Configure SSH
+        env:
+          HETZNER_HOST: ${{ secrets.HETZNER_HOST }}
+          HETZNER_PORT: ${{ secrets.HETZNER_PORT }}
+          HETZNER_USER: ${{ secrets.HETZNER_USER }}
+          HETZNER_SSH_KEY: ${{ secrets.HETZNER_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$HETZNER_HOST"
+          test -n "$HETZNER_USER"
+          test -n "$HETZNER_SSH_KEY"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$HETZNER_SSH_KEY" > ~/.ssh/hetzner_deploy_key
+          chmod 600 ~/.ssh/hetzner_deploy_key
+          ssh-keyscan -p "${HETZNER_PORT:-22}" "$HETZNER_HOST" >> ~/.ssh/known_hosts
+
+      - name: Sync website and deploy config
+        env:
+          HETZNER_HOST: ${{ secrets.HETZNER_HOST }}
+          HETZNER_PORT: ${{ secrets.HETZNER_PORT }}
+          HETZNER_USER: ${{ secrets.HETZNER_USER }}
+          HETZNER_PATH: ${{ secrets.HETZNER_PATH }}
+        run: |
+          set -euo pipefail
+          test -n "$HETZNER_PATH"
+          SSH_TARGET="$HETZNER_USER@$HETZNER_HOST"
+          SSH_PORT="${HETZNER_PORT:-22}"
+          SSH_CMD="ssh -i ~/.ssh/hetzner_deploy_key -p $SSH_PORT -o IdentitiesOnly=yes"
+
+          $SSH_CMD "$SSH_TARGET" "mkdir -p '$HETZNER_PATH/web' '$HETZNER_PATH/deploy'"
+
+          rsync -az --delete \
+            --exclude '/packs/**' \
+            -e "$SSH_CMD" \
+            web/ "$SSH_TARGET:$HETZNER_PATH/web/"
+
+          rsync -az --delete \
+            --exclude '/.env' \
+            -e "$SSH_CMD" \
+            deploy/ "$SSH_TARGET:$HETZNER_PATH/deploy/"
+
+      - name: Restart Doompedia and reload shared Caddy
+        env:
+          HETZNER_HOST: ${{ secrets.HETZNER_HOST }}
+          HETZNER_PORT: ${{ secrets.HETZNER_PORT }}
+          HETZNER_USER: ${{ secrets.HETZNER_USER }}
+          HETZNER_PATH: ${{ secrets.HETZNER_PATH }}
+        run: |
+          set -euo pipefail
+          SSH_TARGET="$HETZNER_USER@$HETZNER_HOST"
+          SSH_PORT="${HETZNER_PORT:-22}"
+          ssh -i ~/.ssh/hetzner_deploy_key -p "$SSH_PORT" -o IdentitiesOnly=yes "$SSH_TARGET" "HETZNER_PATH='$HETZNER_PATH' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$HETZNER_PATH"
+          if [ ! -f deploy/.env ]; then
+            cp deploy/.env.example deploy/.env
+          fi
+          set -a
+          . deploy/.env
+          set +a
+          docker compose -f deploy/docker-compose.prod.yml pull
+          docker compose -f deploy/docker-compose.prod.yml up -d
+
+          PUBLIC_CADDY_DIR="${PUBLIC_CADDY_DIR:-/opt/caddy}"
+          PUBLIC_CADDYFILE="$PUBLIC_CADDY_DIR/Caddyfile"
+
+          if ! grep -q "$DOOMPEDIA_DOMAIN" "$PUBLIC_CADDYFILE"; then
+            printf '\n' >> "$PUBLIC_CADDYFILE"
+            sed "s/doompedia.elfeel.me/$DOOMPEDIA_DOMAIN/g; s/doompedia-web:8080/doompedia-web:${DOOMPEDIA_INTERNAL_PORT:-8080}/g" \
+              "$HETZNER_PATH/deploy/Caddyfile.public" >> "$PUBLIC_CADDYFILE"
+          fi
+
+          cd "$PUBLIC_CADDY_DIR"
+          docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile
+          REMOTE
