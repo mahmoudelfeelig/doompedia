@@ -11,7 +11,7 @@ fi
 
 OUT_ROOT="${OUT_ROOT:-$ROOT_DIR/data/out/thematic-packs}"
 SITE_ROOT="${SITE_ROOT:-$ROOT_DIR/data/site/packs}"
-BASE_URL="${BASE_URL:-https://packs.example.invalid/packs}"
+BASE_URL="${BASE_URL:-https://doompedia.elfeel.me/packs}"
 LANGUAGE="${LANGUAGE:-en}"
 COMPRESSION="${COMPRESSION:-gzip}"
 VERSION="${VERSION:-1}"

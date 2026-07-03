@@ -82,7 +82,7 @@ Expected output:
 ## 2) Prepare hosted site layout
 ### Publish core pack
 ```bash
-BASE_URL="https://packs.example.com/packs/en-core-1m/v1" \
+BASE_URL="https://doompedia.elfeel.me/packs/en-core-1m/v1" \
 ./scripts/publish_pack.sh
 ```
 

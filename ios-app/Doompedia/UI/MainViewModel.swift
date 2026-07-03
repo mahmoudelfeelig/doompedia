@@ -625,6 +625,7 @@ final class MainViewModel: ObservableObject {
 }
 
 private func buildPackCatalog(customPacksJSON: String) -> [PackOption] {
+    let hostedBaseURL = "https://doompedia.elfeel.me/packs"
     let defaults = [
         PackOption(
             id: "en-core-1m",
@@ -632,7 +633,7 @@ private func buildPackCatalog(customPacksJSON: String) -> [PackOption] {
             subtitle: "General encyclopedia pack with biographies, science, geography, history, and culture.",
             downloadSize: "~380 MB (gzip) / ~396 MB raw",
             installSize: "~1.3 GB",
-            manifestURL: "https://packs.example.invalid/packs/en-core-1m/v1/manifest.json",
+            manifestURL: "\(hostedBaseURL)/en-core-1m/v1/manifest.json",
             available: true,
             articleCount: 1_000_000,
             shardCount: 25,
@@ -645,7 +646,7 @@ private func buildPackCatalog(customPacksJSON: String) -> [PackOption] {
             subtitle: "Focused on science, technology, health, and environment topics.",
             downloadSize: "~1.2 MB (gzip)",
             installSize: "~20 MB",
-            manifestURL: "https://packs.example.invalid/packs/en-science-250k/v1/manifest.json",
+            manifestURL: "\(hostedBaseURL)/en-science-250k/v1/manifest.json",
             available: true,
             articleCount: 16_811,
             shardCount: 1,
@@ -658,7 +659,7 @@ private func buildPackCatalog(customPacksJSON: String) -> [PackOption] {
             subtitle: "Focused on history, biography, culture, and politics topics.",
             downloadSize: "~16 MB (gzip)",
             installSize: "~340 MB",
-            manifestURL: "https://packs.example.invalid/packs/en-history-250k/v1/manifest.json",
+            manifestURL: "\(hostedBaseURL)/en-history-250k/v1/manifest.json",
             available: true,
             articleCount: 250_000,
             shardCount: 7,
@@ -671,7 +672,7 @@ private func buildPackCatalog(customPacksJSON: String) -> [PackOption] {
             subtitle: "Largest available EN pack with all extracted short summaries.",
             downloadSize: "~384 MB (gzip)",
             installSize: "~6-9 GB",
-            manifestURL: "https://packs.example.invalid/packs/en-all-summaries/v1/manifest.json",
+            manifestURL: "\(hostedBaseURL)/en-all-summaries/v1/manifest.json",
             available: true,
             articleCount: 6_262_893,
             shardCount: 157,

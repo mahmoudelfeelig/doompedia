@@ -261,7 +261,11 @@ class PackUpdateService(
         File(updateRoot, "manifest.json").writeText(
             json.encodeToString(PackManifest.serializer(), localManifest),
         )
-        packInstaller.installFromDirectory(updateRoot, expectedPackId = manifest.packId)
+        packInstaller.installFromDirectory(
+            directory = updateRoot,
+            expectedPackId = manifest.packId,
+            replaceExisting = true,
+        )
     }
 
     private fun resolveUrl(manifestUrl: String, shardUrl: String): String {

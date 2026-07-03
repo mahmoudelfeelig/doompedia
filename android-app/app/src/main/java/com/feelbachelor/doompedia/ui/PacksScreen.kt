@@ -30,11 +30,8 @@ fun PacksScreen(
     imagePrefetch: ImagePrefetchUi,
     packs: List<PackOption>,
     onChoosePack: (PackOption) -> Unit,
-    onAddPackByManifestUrl: (String) -> Unit,
-    onRemovePack: (PackOption) -> Unit,
     onSetDownloadPreviewImages: (Boolean) -> Unit,
     onDownloadImagesNow: () -> Unit,
-    onSetManifestUrl: (String) -> Unit,
     onCheckUpdatesNow: () -> Unit,
 ) {
     val activePack = packs.firstOrNull {

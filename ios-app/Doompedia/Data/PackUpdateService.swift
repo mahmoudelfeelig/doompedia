@@ -264,7 +264,11 @@ final class PackUpdateService {
             bytesPerSecond: 0,
             detail: "Applying downloaded content"
         ))
-        _ = try installer.install(from: updateRoot, expectedPackID: manifest.packId)
+        _ = try installer.install(
+            from: updateRoot,
+            expectedPackID: manifest.packId,
+            replaceExisting: true
+        )
     }
 
     private func updateDirectory(packID: String, version: Int) throws -> URL {

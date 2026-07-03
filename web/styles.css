@@ -1005,6 +1005,7 @@ svg {
 
 dialog {
   width: min(calc(100% - 32px), 720px);
+  height: min(88vh, 820px);
   max-height: min(88vh, 820px);
   padding: 0;
   overflow: hidden;
@@ -1021,11 +1022,17 @@ dialog::backdrop {
 }
 
 .article-dialog {
-  overflow-y: auto;
+  display: flex;
+  height: 100%;
+  max-height: inherit;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .dialog-image {
   position: relative;
+  flex-shrink: 0;
+  max-height: 42vh;
   aspect-ratio: 16 / 9;
   background: var(--line);
 }
@@ -1033,7 +1040,7 @@ dialog::backdrop {
 .dialog-image img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .dialog-close {
@@ -1046,6 +1053,11 @@ dialog::backdrop {
 }
 
 .dialog-copy {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
   padding: 24px;
 }
 
@@ -1062,10 +1074,21 @@ dialog::backdrop {
   line-height: 1.7;
 }
 
+.dialog-summary {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
 .dialog-actions {
   display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
   gap: 10px;
   margin-top: 22px;
+  padding-top: 14px;
+  background: var(--surface-raised);
 }
 
 .toast {
@@ -1288,6 +1311,7 @@ dialog::backdrop {
 
   dialog {
     width: 100%;
+    height: 92vh;
     max-width: none;
     max-height: 92vh;
     margin: auto 0 0;
@@ -1296,7 +1320,20 @@ dialog::backdrop {
   }
 
   .dialog-image {
-    aspect-ratio: 4 / 3;
+    aspect-ratio: 16 / 10;
+  }
+
+  .dialog-copy {
+    padding: 18px 16px 16px;
+  }
+
+  .dialog-summary {
+    min-height: 90px;
+  }
+
+  .dialog-actions > * {
+    flex: 1 1 180px;
+    justify-content: center;
   }
 
   .toast {

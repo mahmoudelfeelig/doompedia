@@ -153,6 +153,7 @@ final class SQLiteStore {
         if sqlite3_open(url.path, &db) != SQLITE_OK {
             throw SQLiteStoreError.openDatabase(lastError())
         }
+        try execute(sql: "PRAGMA foreign_keys = ON")
         try migrate()
     }
 
@@ -394,7 +395,9 @@ final class SQLiteStore {
             try execute(
                 sql: """
                 INSERT OR IGNORE INTO article_folder_refs (folder_id, page_id, created_at)
-                SELECT 1, page_id, created_at FROM bookmarks
+                SELECT 1, b.page_id, b.created_at
+                FROM bookmarks b
+                JOIN articles a ON a.page_id = b.page_id
                 """
             )
         }
@@ -580,6 +583,21 @@ final class SQLiteStore {
         }
     }
 
+    func deleteAllArticles() throws {
+        try queue.sync {
+            try execute(sql: "BEGIN TRANSACTION")
+            do {
+                try execute(sql: "DELETE FROM aliases")
+                try execute(sql: "DELETE FROM article_folder_refs")
+                try execute(sql: "DELETE FROM articles")
+                try execute(sql: "COMMIT")
+            } catch {
+                _ = try? execute(sql: "ROLLBACK")
+                throw error
+            }
+        }
+    }
+
     private func ensureSaveDefaultsLocked() throws {
         try execute(
             sql: """
@@ -681,7 +699,12 @@ final class SQLiteStore {
             "CREATE INDEX IF NOT EXISTS idx_article_folder_refs_page ON article_folder_refs(page_id)",
             "INSERT OR IGNORE INTO save_folders (folder_id, name, is_default, created_at) VALUES (\(Self.bookmarksFolderID), 'Bookmarks', 1, 0)",
             "INSERT OR IGNORE INTO save_folders (folder_id, name, is_default, created_at) VALUES (\(Self.readFolderID), 'Read', 1, 0)",
-            "INSERT OR IGNORE INTO article_folder_refs (folder_id, page_id, created_at) SELECT \(Self.bookmarksFolderID), page_id, created_at FROM bookmarks",
+            """
+            INSERT OR IGNORE INTO article_folder_refs (folder_id, page_id, created_at)
+            SELECT \(Self.bookmarksFolderID), b.page_id, b.created_at
+            FROM bookmarks b
+            JOIN articles a ON a.page_id = b.page_id
+            """,
         ]
 
         try queue.sync {

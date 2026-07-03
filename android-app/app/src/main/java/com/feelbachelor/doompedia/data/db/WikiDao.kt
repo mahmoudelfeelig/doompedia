@@ -26,6 +26,9 @@ interface WikiDao {
     @Query("DELETE FROM articles WHERE pageId IN (:pageIds)")
     suspend fun deleteArticles(pageIds: List<Long>)
 
+    @Query("DELETE FROM articles")
+    suspend fun deleteAllArticles()
+
     @Query(
         """
         SELECT a.pageId, a.lang, a.title, a.normalizedTitle, a.summary, a.wikiUrl,
@@ -149,6 +152,7 @@ interface WikiDao {
         INSERT OR IGNORE INTO article_folder_refs(folderId, pageId, createdAt)
         SELECT 1, b.pageId, b.createdAt
         FROM bookmarks b
+        JOIN articles a ON a.pageId = b.pageId
         """
     )
     suspend fun backfillBookmarksIntoDefaultFolder()

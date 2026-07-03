@@ -47,7 +47,7 @@ struct PacksView: View {
                 }
 
                 Section("Add pack by manifest URL") {
-                    TextField("https://packs.example.com/packs/<id>/v1/manifest.json", text: $addManifestURLDraft)
+                    TextField("https://doompedia.elfeel.me/packs/<id>/v1/manifest.json", text: $addManifestURLDraft)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
 

@@ -100,7 +100,11 @@ function saveState() {
     savedSort: app.state.savedSort,
     settings: app.state.settings,
   };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+  } catch {
+    showToast("Browser storage is unavailable; changes will reset after reload");
+  }
   updateSavedCount();
 }
 
@@ -200,6 +204,11 @@ function renderExplore() {
 }
 
 function renderFeed() {
+  if (app.observer) {
+    app.observer.disconnect();
+    app.observer = null;
+  }
+
   const feed = document.querySelector("#feed");
   const filtered = filteredArticles();
   const visible = filtered.slice(0, app.state.visibleCount);
@@ -575,7 +584,7 @@ function openArticle(article) {
         <div class="dialog-copy">
           <span class="eyebrow">${escapeHtml(titleCase(article.topic_key))}</span>
           <h2>${escapeHtml(article.title)}</h2>
-          <p>${escapeHtml(article.summary)}</p>
+          <p class="dialog-summary">${escapeHtml(article.summary)}</p>
           <div class="dialog-actions">
             <button class="quiet-button ${isSaved ? "active" : ""}" type="button" data-action="dialog-save">${icon("bookmark")} ${isSaved ? "Saved" : "Save"}</button>
             <a class="primary-button" href="${escapeHtml(article.wiki_url)}" target="_blank" rel="noreferrer">Read on Wikipedia ${icon("external")}</a>

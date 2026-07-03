@@ -9,7 +9,11 @@ final class PackInstaller {
         self.store = store
     }
 
-    func install(from directory: URL, expectedPackID: String? = nil) throws -> PackManifest {
+    func install(
+        from directory: URL,
+        expectedPackID: String? = nil,
+        replaceExisting: Bool = false
+    ) throws -> PackManifest {
         let manifestURL = directory.appendingPathComponent("manifest.json")
         let manifestData = try Data(contentsOf: manifestURL)
         let manifest = try decoder.decode(PackManifest.self, from: manifestData)
@@ -18,10 +22,22 @@ final class PackInstaller {
             throw NSError(domain: "Doompedia", code: 41, userInfo: [NSLocalizedDescriptionKey: "Unexpected pack id \(manifest.packId)"])
         }
 
-        for shard in manifest.shards {
+        let shardURLs = try manifest.shards.map { shard in
             let shardURL = resolveShardURL(baseDirectory: directory, shardPath: shard.url)
             try validateChecksum(url: shardURL, expected: shard.sha256)
+            return shardURL
+        }
+
+        if replaceExisting {
+            try store.deleteAllArticles()
+        }
+
+        for shardURL in shardURLs {
             try applyShard(fileURL: shardURL)
+        }
+
+        if replaceExisting {
+            try store.ensureSaveDefaults()
         }
 
         return manifest

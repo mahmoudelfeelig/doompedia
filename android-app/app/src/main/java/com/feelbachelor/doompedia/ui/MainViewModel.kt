@@ -964,18 +964,14 @@ class MainViewModel(
         }.getOrNull()
 
         imageUrlMutex.withLock {
-            if (fetched != null && imageUrlCache.size > 50_000) {
+            if (imageUrlCache.size > 50_000) {
                 val iterator = imageUrlCache.entries.iterator()
                 if (iterator.hasNext()) {
                     iterator.next()
                     iterator.remove()
                 }
             }
-            if (fetched != null) {
-                imageUrlCache[card.pageId] = fetched
-            } else {
-                imageUrlCache.remove(card.pageId)
-            }
+            imageUrlCache[card.pageId] = fetched
         }
         return fetched
     }

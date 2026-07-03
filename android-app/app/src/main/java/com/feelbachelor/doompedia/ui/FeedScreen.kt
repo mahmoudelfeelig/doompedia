@@ -420,7 +420,7 @@ private fun ArticleCardItem(
     var thumbnailUrl by remember(card.pageId) { mutableStateOf<String?>(null) }
 
     LaunchedEffect(card.pageId, downloadPreviewImages) {
-        if (downloadPreviewImages && isImageCandidate(card.pageId)) {
+        if (downloadPreviewImages) {
             thumbnailUrl = onResolveThumbnailUrl(card)
         } else {
             thumbnailUrl = null
@@ -547,8 +547,4 @@ private fun buildTopicKeywords(card: ArticleCard): List<String> {
     }
 
     return tags.take(6).toList()
-}
-
-private fun isImageCandidate(pageId: Long): Boolean {
-    return true
 }

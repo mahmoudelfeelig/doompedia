@@ -7,7 +7,7 @@ PIPELINE_SRC="$ROOT_DIR/data-pipeline/src"
 SOURCE_MANIFEST="${SOURCE_MANIFEST:-$ROOT_DIR/data/site/packs/en-core-1m/v1/manifest.json}"
 OUT_ROOT="${OUT_ROOT:-$ROOT_DIR/data/out/focus-packs}"
 SITE_ROOT="${SITE_ROOT:-$ROOT_DIR/data/site/packs}"
-BASE_URL="${BASE_URL:-https://packs.example.invalid/packs}"
+BASE_URL="${BASE_URL:-https://doompedia.elfeel.me/packs}"
 
 SCI_TARGET="${SCI_TARGET:-250000}"
 SCI_SHARD_SIZE="${SCI_SHARD_SIZE:-40000}"

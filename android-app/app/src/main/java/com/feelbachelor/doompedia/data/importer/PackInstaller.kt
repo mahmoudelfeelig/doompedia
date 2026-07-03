@@ -16,7 +16,11 @@ class PackInstaller(
     private val db: WikiDatabase,
     private val json: Json = Json { ignoreUnknownKeys = true },
 ) {
-    suspend fun installFromDirectory(directory: File, expectedPackId: String? = null): PackManifest {
+    suspend fun installFromDirectory(
+        directory: File,
+        expectedPackId: String? = null,
+        replaceExisting: Boolean = false,
+    ): PackManifest {
         return withContext(Dispatchers.IO) {
             val manifestFile = File(directory, "manifest.json")
             require(manifestFile.exists()) { "manifest.json not found in ${directory.path}" }
@@ -27,14 +31,30 @@ class PackInstaller(
                 }
             }
 
-            manifest.shards.forEach { shard ->
+            val shardFiles = manifest.shards.map { shard ->
                 val shardFile = resolveShardPath(directory, shard.url)
                 require(shardFile.exists()) { "Missing shard file: ${shardFile.path}" }
                 val digest = shardFile.sha256()
                 require(digest.equals(shard.sha256, ignoreCase = true)) {
                     "Checksum mismatch for shard ${shard.id}"
                 }
+                shardFile
+            }
+
+            if (replaceExisting) {
+                db.withTransaction {
+                    db.wikiDao().deleteAllArticles()
+                }
+            }
+
+            shardFiles.forEach { shardFile ->
                 applyShard(shardFile)
+            }
+
+            if (replaceExisting) {
+                db.withTransaction {
+                    db.wikiDao().backfillBookmarksIntoDefaultFolder()
+                }
             }
 
             manifest
