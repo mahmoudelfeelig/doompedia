@@ -4,6 +4,10 @@ Offline-first discovery app with 1M Wikipedia summary cards, native Android and 
 
 ## Product summary
 - Cards are available offline after initial setup.
+- Hosted pack files can be served from a normal HTTPS static host such as Caddy on Hetzner.
+- A curated 500-article starter feed uses freely licensed Wikipedia thumbnails
+  hosted with the website and cached locally instead of inflating the APK or
+  core article packs.
 - Optional online mode can fetch live summaries without downloading a pack first (with local caching).
 - Card tap opens the full article via Wikipedia universal link (Wikipedia app if installed, otherwise browser).
 - No account system and no cloud sync.
@@ -14,6 +18,8 @@ Offline-first discovery app with 1M Wikipedia summary cards, native Android and 
 
 ## Repository layout
 - `docs/` product and technical decisions.
+- `web/` static public site for the project and hosted pack links.
+- `deploy/` Hetzner/Caddy static hosting notes.
 - `shared-spec/` shared schema + ranking + manifest contracts.
 - `data-pipeline/` pack build and delta tooling.
 - `android-app/` Kotlin + Jetpack Compose implementation.
@@ -54,8 +60,8 @@ To build real thematic split packs from an existing large source manifest:
 
 ## Publish/deploy pack
 - Prepare hosted pack layout: `scripts/publish_pack.sh`
-- Deploy to S3-compatible storage: `scripts/deploy_pack_to_s3.sh`
-- Deploy directly to Cloudflare R2: `scripts/deploy_pack_to_r2.sh`
+- Default deploy target: static files on Hetzner behind Caddy (`deploy/README.md`).
+- Optional S3-compatible deploy helpers remain available: `scripts/deploy_pack_to_s3.sh`, `scripts/deploy_pack_to_r2.sh`.
 - See full guide: `docs/DEPLOYMENT.md`
 
 ## iOS builds from Windows

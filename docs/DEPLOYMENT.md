@@ -3,11 +3,41 @@
 ## Goal
 Host `manifest.json` and shard files on HTTPS so Android and iOS can fetch pack updates.
 
-The manifest is the "table of contents" for your 1M pack. It tells the app:
+The manifest is the "table of contents" for your pack. It tells the app:
 - pack id/version
 - which shard files exist
 - checksum/hash for each shard
 - optional delta patch info
+
+## Recommended target: Hetzner + Caddy
+Use Hetzner as a static host for both the website and pack files:
+
+```text
+/opt/doompedia/web/
+  index.html
+  styles.css
+  assets/
+  packs/
+    en-core-1m/v1/manifest.json
+    en-core-1m/v1/shards/*
+```
+
+The Android defaults expect:
+
+```text
+https://doompedia.elfeel.me/packs/en-core-1m/v1/manifest.json
+```
+
+Publish locally, then sync to the server:
+
+```bash
+BASE_URL="https://doompedia.elfeel.me/packs/en-core-1m/v1" ./scripts/publish_pack.sh
+
+rsync -av --delete web/ user@server:/opt/doompedia/web/
+rsync -av --delete data/site/packs/ user@server:/opt/doompedia/web/packs/
+```
+
+Use `deploy/Caddyfile` as the starting point for the host Caddy config.
 
 ## 1) Build packs locally
 
@@ -85,7 +115,7 @@ python3 data-pipeline/src/doompedia_pipeline/verify_pack.py \
   --count-lines
 ```
 
-## 4) Upload to Cloudflare R2 (S3-compatible)
+## Optional: Upload to Cloudflare R2 (S3-compatible)
 Set R2 credentials once (PowerShell or shell environment):
 ```bash
 export AWS_ACCESS_KEY_ID="<R2_ACCESS_KEY_ID>"
@@ -131,7 +161,7 @@ $env:AWS_SECRET_ACCESS_KEY = "<R2_SECRET_ACCESS_KEY>"
 aws s3 sync .\data\site s3://doompedia-packs --delete --region auto --endpoint-url https://<your_cloudflare_account_id>.r2.cloudflarestorage.com
 ```
 
-Then map your domain (for example `packs.example.invalid`) to the R2 public/custom domain endpoint in Cloudflare and ensure HTTPS is enabled.
+Then map your domain to the R2 public/custom domain endpoint in Cloudflare and ensure HTTPS is enabled.
 
 ## 5) Configure Cloudflare caching
 Recommended Cache Rules:
@@ -177,23 +207,23 @@ Then publish normally:
 ```bash
 PACK_DIR=./data/out/en-all/pack-v2 \
 OUTPUT_DIR=./data/site/packs/en-all-summaries/v2 \
-BASE_URL=https://packs.example.invalid/packs/en-all-summaries/v2 \
+BASE_URL=https://doompedia.elfeel.me/packs/en-all-summaries/v2 \
 LATEST_POINTER=./data/site/packs/en-all-summaries/latest.json \
 ./scripts/publish_en_all_pack.sh
 ```
 
-## 7) Configure app manifest URL
-In app Packs tab, set one of:
-- `https://packs.example.invalid/packs/en-core-1m/v1/manifest.json`
-- `https://packs.example.invalid/packs/en-history-250k/v1/manifest.json`
-- `https://packs.example.invalid/packs/en-science-250k/v1/manifest.json`
-- `https://packs.example.invalid/packs/en-all-summaries/v1/manifest.json` (after building/publishing EN-all)
+## 7) App pack URLs
+The Android app now exposes hosted pack choices instead of a raw URL field. The built-in defaults are:
+- `https://doompedia.elfeel.me/packs/en-core-1m/v1/manifest.json`
+- `https://doompedia.elfeel.me/packs/en-history-250k/v1/manifest.json`
+- `https://doompedia.elfeel.me/packs/en-science-250k/v1/manifest.json`
+- `https://doompedia.elfeel.me/packs/en-all-summaries/v1/manifest.json` (after building/publishing EN-all)
 
 Use HTTPS only; Android blocks cleartext HTTP by default.
 
 ## 8) Verify update path on device
 - Open app Packs tab.
-- Enter manifest URL.
+- Choose a hosted pack.
 - Tap `Check updates now`.
 - Confirm installed pack version updates.
 - Turn airplane mode on and verify feed/search still work offline.

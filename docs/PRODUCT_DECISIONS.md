@@ -3,6 +3,7 @@
 ## 1) Dataset scope
 - Initial release ships one language pack: `en`.
 - Total cards target: `1,000,000`.
+- First public hosted dataset should be `en-core-1m`; larger all-English summary packs can follow after hosting and bandwidth are observed.
 - Source namespace: main/article namespace only (`ns=0`).
 - Redirect pages are not cards, but redirect titles are stored as aliases for search.
 - Disambiguation pages are excluded from feed ranking but remain searchable.
@@ -32,6 +33,7 @@
 - Logical pack id: `en-core-1m`.
 - Delivery model: chunked shards with a top-level manifest.
 - Typical shard sizing target: `~40k` cards per shard.
+- Default public hosting target: static HTTPS files on Hetzner/Caddy.
 - Download policy defaults:
   - Wi-Fi only: enabled
   - resume support: enabled
@@ -47,6 +49,10 @@
 ## 4) Performance and storage targets
 - Download size target: `<= 600 MB` for the initial pack.
 - Installed data target: `<= 1.5 GB` on disk.
+- Article thumbnails are fetched from Wikipedia on demand and cached with a bounded media cache instead of bundled into the core card pack.
+- The first-run feed is seeded with 500 Wikipedia Vital Articles. Their freely
+  licensed 512 px thumbnails are hosted as a roughly 110 MB static set on
+  Hetzner, with source and license metadata retained in the Android manifest.
 - Cold start p95: `<= 2.5s` to first usable feed.
 - Feed rendering: `>= 55 FPS` on representative mid-tier devices.
 - Search latency p95: `<= 150ms` for top-20 results at query length >= 3.

@@ -2,6 +2,7 @@
 
 ## Done
 - Shared contracts are in place (`shared-spec/`) for schema, ranking config, search behavior, and pack manifest.
+- Static public site and Hetzner/Caddy hosting scaffold are in place under `web/` and `deploy/`.
 - Data pipeline supports dump extraction, 1M build, shard pack generation, delta generation, publish layout, and pack verification.
 - `data/site/packs/en-core-1m/v1` contains a complete 1,000,000-card pack:
   - 25 shards present
