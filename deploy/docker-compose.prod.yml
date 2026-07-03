@@ -1,0 +1,35 @@
+services:
+  doompedia-web:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    expose:
+      - "${DOOMPEDIA_INTERNAL_PORT:-8080}"
+    volumes:
+      - ../web:/srv:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+      - /config:size=16m,mode=0755
+      - /data:size=16m,mode=0755
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 128
+    mem_limit: "${DOOMPEDIA_MEMORY_LIMIT:-256m}"
+    cpus: "${DOOMPEDIA_CPU_LIMIT:-0.50}"
+    logging:
+      driver: json-file
+      options:
+        max-size: "25m"
+        max-file: "3"
+    networks:
+      - web
+
+networks:
+  web:
+    external: true

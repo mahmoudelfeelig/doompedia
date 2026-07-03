@@ -1,0 +1,3 @@
+doompedia.elfeel.me {
+	reverse_proxy doompedia-web:8080
+}

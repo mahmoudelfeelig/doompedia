@@ -23,3 +23,5 @@ data/site/
 
 # Local markers
 CHECK_ME.txt
+.qa-screenshots/
+deploy/.env

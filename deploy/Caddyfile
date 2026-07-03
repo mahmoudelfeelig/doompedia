@@ -1,0 +1,36 @@
+:8080 {
+	root * /srv
+
+	request_body {
+		max_size 1KB
+	}
+
+	@unsafeMethods not method GET HEAD
+	respond @unsafeMethods 405
+
+	header {
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'none'; img-src 'self' data:; script-src 'self'; style-src 'self'; connect-src 'self'; upgrade-insecure-requests"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), clipboard-write=(self), web-share=(self)"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+	}
+
+	header /media/featured/* Cache-Control "public, max-age=31536000, immutable"
+
+	header /packs/* Cache-Control "public, max-age=31536000, immutable"
+	header /packs/* Access-Control-Allow-Origin "*"
+	header /packs/* Access-Control-Allow-Methods "GET, HEAD"
+	header /packs/* Vary "Origin"
+
+	header /packs/*/manifest.json Cache-Control "public, max-age=120, must-revalidate"
+	header /packs/*/latest.json Cache-Control "public, max-age=120, must-revalidate"
+
+	header /content/* Cache-Control "public, max-age=300, must-revalidate"
+	header /assets/* Cache-Control "public, max-age=86400"
+	header /app.js Cache-Control "public, max-age=300, must-revalidate"
+	header /styles.css Cache-Control "public, max-age=300, must-revalidate"
+
+	try_files {path} /index.html
+	file_server
+}
