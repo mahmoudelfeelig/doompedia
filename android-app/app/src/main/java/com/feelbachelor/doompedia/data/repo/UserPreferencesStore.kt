@@ -24,13 +24,13 @@ data class UserSettings(
     val feedMode: FeedMode = FeedMode.OFFLINE,
     val personalizationLevel: PersonalizationLevel = PersonalizationLevel.LOW,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
-    val accentHex: String = "#0B6E5B",
+    val accentHex: String = "#0B5C4A",
     val fontScale: Float = 1.0f,
     val highContrast: Boolean = false,
     val reduceMotion: Boolean = false,
     val readSort: ReadSort = ReadSort.NEWEST_FIRST,
     val wifiOnlyDownloads: Boolean = true,
-    val downloadPreviewImages: Boolean = false,
+    val downloadPreviewImages: Boolean = true,
     val manifestUrl: String = "",
     val installedPackVersion: Int = 0,
     val installedPackSignature: String = "",
@@ -197,7 +197,7 @@ class UserPreferencesStore(
                     prefs[wifiOnlyKey] = root.optBoolean("wifiOnlyDownloads", true)
                 }
                 if (root.has("downloadPreviewImages")) {
-                    prefs[downloadImagesKey] = root.optBoolean("downloadPreviewImages", false)
+                    prefs[downloadImagesKey] = root.optBoolean("downloadPreviewImages", true)
                 }
                 root.optString("manifestUrl").takeIf { it.isNotBlank() }?.let { prefs[manifestUrlKey] = it.trim() }
                 if (root.has("installedPackVersion")) {
@@ -234,13 +234,13 @@ class UserPreferencesStore(
             feedMode = feedMode,
             personalizationLevel = level,
             themeMode = theme,
-            accentHex = prefs[accentHexKey] ?: "#0B6E5B",
+            accentHex = prefs[accentHexKey] ?: "#0B5C4A",
             fontScale = (prefs[fontScaleKey] ?: 1.0f).coerceIn(0.85f, 1.35f),
             highContrast = prefs[highContrastKey] ?: false,
             reduceMotion = prefs[reduceMotionKey] ?: false,
             readSort = readSort,
             wifiOnlyDownloads = prefs[wifiOnlyKey] ?: true,
-            downloadPreviewImages = prefs[downloadImagesKey] ?: false,
+            downloadPreviewImages = prefs[downloadImagesKey] ?: true,
             manifestUrl = prefs[manifestUrlKey] ?: "",
             installedPackVersion = prefs[installedPackVersionKey] ?: 0,
             installedPackSignature = prefs[installedPackSignatureKey] ?: "",

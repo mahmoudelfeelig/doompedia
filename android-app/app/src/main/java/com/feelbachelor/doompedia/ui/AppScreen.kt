@@ -169,13 +169,10 @@ fun AppScreen(
                 onSetFeedMode = onSetFeedMode,
                 onSetPersonalization = onSetPersonalization,
                 onSetThemeMode = onSetThemeMode,
-                onSetAccentHex = onSetAccentHex,
                 onSetFontScale = onSetFontScale,
                 onSetHighContrast = onSetHighContrast,
                 onSetReduceMotion = onSetReduceMotion,
                 onSetWifiOnly = onSetWifiOnly,
-                onExportSettings = onExportSettings,
-                onImportSettings = onImportSettings,
                 onOpenExternalUrl = onOpenExternalUrl,
             )
         }

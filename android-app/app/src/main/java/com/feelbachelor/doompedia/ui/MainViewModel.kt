@@ -9,6 +9,7 @@ import coil.Coil
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import com.feelbachelor.doompedia.AppContainer
+import com.feelbachelor.doompedia.data.importer.BundledThumbnailIndex
 import com.feelbachelor.doompedia.data.importer.PackManifest
 import com.feelbachelor.doompedia.data.repo.UserSettings
 import com.feelbachelor.doompedia.data.repo.WikiRepository
@@ -112,6 +113,7 @@ class MainViewModel(
     private val _events = MutableSharedFlow<UiEvent>()
     val events: SharedFlow<UiEvent> = _events.asSharedFlow()
     private val manifestJson = Json { ignoreUnknownKeys = true }
+    private val bundledThumbnailIndex = BundledThumbnailIndex(container.appContext)
     private val imageUrlCache = linkedMapOf<Long, String?>()
     private val imageUrlMutex = Mutex()
     private val offlineFeedPageSize = 80
@@ -944,6 +946,8 @@ class MainViewModel(
         val settings = _uiState.value.settings
         if (!settings.downloadPreviewImages) return null
 
+        bundledThumbnailIndex.assetUri(card.pageId)?.let { return it }
+
         imageUrlMutex.withLock {
             if (imageUrlCache.containsKey(card.pageId)) {
                 return imageUrlCache[card.pageId]
@@ -1001,6 +1005,7 @@ class MainViewModelFactory(
 }
 
 private fun defaultPackCatalog(customPacksJson: String = "[]"): List<PackOption> {
+    val hostedBaseUrl = "https://doompedia.elfeel.me/packs"
     val defaults = listOf(
         PackOption(
             id = "en-core-1m",
@@ -1008,7 +1013,7 @@ private fun defaultPackCatalog(customPacksJson: String = "[]"): List<PackOption>
             subtitle = "General encyclopedia pack. Includes science, geography, history, culture, and biographies.",
             downloadSize = "~380 MB (gzip) / ~396 MB raw",
             installSize = "~1.3 GB",
-            manifestUrl = "https://packs.example.invalid/packs/en-core-1m/v1/manifest.json",
+            manifestUrl = "$hostedBaseUrl/en-core-1m/v1/manifest.json",
             available = true,
             articleCount = 1_000_000,
             shardCount = 25,
@@ -1020,7 +1025,7 @@ private fun defaultPackCatalog(customPacksJson: String = "[]"): List<PackOption>
             subtitle = "Focused on science, technology, health, and environment topics.",
             downloadSize = "~1.2 MB (gzip)",
             installSize = "~20 MB",
-            manifestUrl = "https://packs.example.invalid/packs/en-science-250k/v1/manifest.json",
+            manifestUrl = "$hostedBaseUrl/en-science-250k/v1/manifest.json",
             available = true,
             articleCount = 16_811,
             shardCount = 1,
@@ -1032,7 +1037,7 @@ private fun defaultPackCatalog(customPacksJson: String = "[]"): List<PackOption>
             subtitle = "Focused on history, biography, culture, and politics topics.",
             downloadSize = "~16 MB (gzip)",
             installSize = "~340 MB",
-            manifestUrl = "https://packs.example.invalid/packs/en-history-250k/v1/manifest.json",
+            manifestUrl = "$hostedBaseUrl/en-history-250k/v1/manifest.json",
             available = true,
             articleCount = 250_000,
             shardCount = 7,
@@ -1044,7 +1049,7 @@ private fun defaultPackCatalog(customPacksJson: String = "[]"): List<PackOption>
             subtitle = "Largest available EN pack with all extracted short summaries.",
             downloadSize = "~384 MB (gzip)",
             installSize = "~6-9 GB",
-            manifestUrl = "https://packs.example.invalid/packs/en-all-summaries/v1/manifest.json",
+            manifestUrl = "$hostedBaseUrl/en-all-summaries/v1/manifest.json",
             available = true,
             articleCount = 6_262_893,
             shardCount = 157,
