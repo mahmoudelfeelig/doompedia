@@ -282,6 +282,10 @@ def extension_for(url: str, content_type: str) -> str:
     return suffix if suffix in {".jpg", ".jpeg", ".png", ".webp", ".gif"} else ".jpg"
 
 
+def content_output_dir(output_assets: Path) -> Path:
+    return output_assets if output_assets.name == "content" else output_assets / "content"
+
+
 def download_thumbnail(article: FeaturedArticle, output_dir: Path) -> dict[str, Any]:
     existing = next(output_dir.glob(f"{article.page_id}-512.*"), None)
     if existing is not None and 0 < existing.stat().st_size <= MAX_THUMBNAIL_BYTES:
@@ -438,8 +442,10 @@ def build_pack(
             }
         )
 
-    seed_path = output_assets / "content" / "seed_en_cards.json"
-    manifest_path = output_assets / "content" / "featured_thumbnails.json"
+    content_dir = content_output_dir(output_assets)
+    content_dir.mkdir(parents=True, exist_ok=True)
+    seed_path = content_dir / "seed_en_cards.json"
+    manifest_path = content_dir / "featured_thumbnails.json"
     seed_path.write_text(json.dumps(seed_rows, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
     manifest_path.write_text(
         json.dumps(
