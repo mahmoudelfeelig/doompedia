@@ -29,13 +29,20 @@ class AssetBootstrapper(
     private val context: Context,
     private val db: WikiDatabase,
 ) {
+    private companion object {
+        const val SEED_VERSION = 2
+        const val PREFS_NAME = "doompedia_bootstrap"
+        const val PREF_SEED_VERSION = "seed_version"
+    }
+
     private val json = Json {
         ignoreUnknownKeys = true
     }
 
     suspend fun ensureSeedData() {
         val dao = db.wikiDao()
-        if (dao.articleCount() > 0) return
+        val preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (preferences.getInt(PREF_SEED_VERSION, 0) >= SEED_VERSION) return
 
         val rows = context.assets
             .open("content/seed_en_cards.json")
@@ -80,5 +87,9 @@ class AssetBootstrapper(
                 dao.insertAliases(aliases)
             }
         }
+
+        preferences.edit()
+            .putInt(PREF_SEED_VERSION, SEED_VERSION)
+            .apply()
     }
 }

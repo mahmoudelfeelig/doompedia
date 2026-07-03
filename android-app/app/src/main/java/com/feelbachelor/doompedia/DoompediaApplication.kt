@@ -35,7 +35,7 @@ class DoompediaApplication : Application(), ImageLoaderFactory {
             .diskCache {
                 DiskCache.Builder()
                     .directory(File(cacheDir, "doompedia_article_images"))
-                    .maxSizeBytes(3L * 1024L * 1024L * 1024L)
+                    .maxSizeBytes(512L * 1024L * 1024L)
                     .build()
             }
             .build()
