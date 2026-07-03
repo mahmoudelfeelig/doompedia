@@ -2,6 +2,7 @@ package com.feelbachelor.doompedia.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -77,6 +78,7 @@ fun SettingsScreen(
                             when (it) {
                                 FeedMode.OFFLINE -> "Offline"
                                 FeedMode.ONLINE -> "Live"
+                                else -> it.name.lowercase().replaceFirstChar(Char::uppercase)
                             }
                         },
                         onSelect = onSetFeedMode,
@@ -93,6 +95,7 @@ fun SettingsScreen(
                                 PersonalizationLevel.LOW -> "Low"
                                 PersonalizationLevel.MEDIUM -> "Med"
                                 PersonalizationLevel.HIGH -> "High"
+                                else -> it.name.lowercase().replaceFirstChar(Char::uppercase)
                             }
                         },
                         onSelect = onSetPersonalization,
@@ -112,6 +115,7 @@ fun SettingsScreen(
                                 ThemeMode.SYSTEM -> "System"
                                 ThemeMode.LIGHT -> "Light"
                                 ThemeMode.DARK -> "Dark"
+                                else -> it.name.lowercase().replaceFirstChar(Char::uppercase)
                             }
                         },
                         onSelect = onSetThemeMode,
@@ -190,7 +194,7 @@ fun SettingsScreen(
 @Composable
 private fun SettingsCard(
     title: String,
-    content: @Composable Column.() -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
 ) {
     Card {
         Column(
