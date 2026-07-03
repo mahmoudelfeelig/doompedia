@@ -134,6 +134,9 @@ jobs:
 
           rsync -az --delete \
             --exclude '/packs/**' \
+            --exclude '/media/featured/**' \
+            --exclude '/content/seed_en_cards.json' \
+            --exclude '/content/featured_thumbnails.json' \
             -e "$SSH_CMD" \
             web/ "$SSH_TARGET:$HETZNER_PATH/web/"
 
