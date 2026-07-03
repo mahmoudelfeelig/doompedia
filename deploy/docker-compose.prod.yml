@@ -1,3 +1,5 @@
+name: doompedia
+
 services:
   doompedia-web:
     image: caddy:2-alpine
@@ -21,7 +23,6 @@ services:
       - ALL
     pids_limit: 128
     mem_limit: "${DOOMPEDIA_MEMORY_LIMIT:-256m}"
-    cpus: "${DOOMPEDIA_CPU_LIMIT:-0.50}"
     logging:
       driver: json-file
       options:
