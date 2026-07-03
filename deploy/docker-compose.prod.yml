@@ -17,10 +17,6 @@ services:
       - /tmp:size=32m,mode=1777
       - /config:size=16m,mode=0755
       - /data:size=16m,mode=0755
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
     pids_limit: 128
     mem_limit: "${DOOMPEDIA_MEMORY_LIMIT:-256m}"
     logging:
